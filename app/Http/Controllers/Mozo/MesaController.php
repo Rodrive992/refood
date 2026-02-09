@@ -5,6 +5,10 @@ namespace App\Http\Controllers\Mozo;
 use App\Http\Controllers\Controller;
 use App\Models\Mesa;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+
+use App\Models\Comanda;
+use App\Models\ComandaItem;
 
 class MesaController extends Controller
 {
@@ -18,12 +22,10 @@ class MesaController extends Controller
     private function assertMesaLocal(Mesa $mesa): void
     {
         abort_unless((int) $mesa->id_local === $this->localId(), 403);
-
-        // Ojo: tu modelo usa fuera_servicio, pero vos estabas chequeando "inactiva"
-        // Te dejo ambos por compatibilidad:
         abort_if(in_array($mesa->estado, ['inactiva', 'fuera_servicio'], true), 422, 'La mesa está inactiva.');
     }
 
+    // ✅ ocupar SIN comanda
     public function ocupar(Request $request, Mesa $mesa)
     {
         $this->assertMesaLocal($mesa);
@@ -35,8 +37,6 @@ class MesaController extends Controller
         $mesa->update([
             'estado'        => 'ocupada',
             'observacion'   => $data['observacion'] ?? null,
-
-            // NUEVO
             'atendida_por'  => auth()->id(),
             'atendida_at'   => now(),
         ]);
@@ -44,38 +44,39 @@ class MesaController extends Controller
         return back()->with('ok', 'Mesa ocupada.');
     }
 
-    public function reservar(Request $request, Mesa $mesa)
-    {
-        $this->assertMesaLocal($mesa);
-
-        $data = $request->validate([
-            'observacion' => ['nullable', 'string', 'max:255'],
-        ]);
-
-        $mesa->update([
-            'estado'        => 'reservada',
-            'observacion'   => $data['observacion'] ?? null,
-
-            // NUEVO (recomendado): si la reserva la hace un mozo, que quede marcado
-            'atendida_por'  => auth()->id(),
-            'atendida_at'   => now(),
-        ]);
-
-        return back()->with('ok', 'Mesa reservada.');
-    }
-
+    // ✅ liberar y además anular comanda activa + borrar items
     public function liberar(Mesa $mesa)
     {
         $this->assertMesaLocal($mesa);
 
-        $mesa->update([
-            'estado'        => 'libre',
-            'observacion'   => null,
+        $localId = $this->localId();
 
-            // NUEVO
-            'atendida_por'  => null,
-            'atendida_at'   => null,
-        ]);
+        DB::transaction(function () use ($mesa, $localId) {
+
+            $comanda = Comanda::query()
+                ->where('id_local', $localId)
+                ->where('id_mesa', $mesa->id)
+                ->whereIn('estado', ['abierta', 'en_cocina', 'lista', 'entregada'])
+                ->latest('id')
+                ->first();
+
+            if ($comanda) {
+                ComandaItem::query()
+                    ->where('id_comanda', $comanda->id)
+                    ->delete();
+
+                $comanda->estado = 'anulada';
+                $comanda->closed_at = now();
+                $comanda->save();
+            }
+
+            $mesa->update([
+                'estado'        => 'libre',
+                'observacion'   => null,
+                'atendida_por'  => null,
+                'atendida_at'   => null,
+            ]);
+        });
 
         return back()->with('ok', 'Mesa liberada.');
     }

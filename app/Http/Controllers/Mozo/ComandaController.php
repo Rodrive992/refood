@@ -26,6 +26,7 @@ class ComandaController extends Controller
     private function assertMesaLocal(Mesa $mesa): void
     {
         abort_if((int) $mesa->id_local !== $this->localId(), 403, 'Mesa fuera de tu local.');
+        abort_if(in_array($mesa->estado, ['inactiva', 'fuera_servicio'], true), 422, 'La mesa está inactiva.');
     }
 
     private function assertComandaLocal(Comanda $comanda): void
@@ -35,7 +36,6 @@ class ComandaController extends Controller
 
     private function ensureComandaActiva(Comanda $comanda): void
     {
-        // SOLO estados editables por mozo (sin "cerrando")
         abort_if(!in_array($comanda->estado, ['abierta', 'en_cocina', 'lista', 'entregada'], true), 422, 'La comanda no está activa.');
     }
 
@@ -44,31 +44,44 @@ class ComandaController extends Controller
         return Comanda::query()
             ->where('id_local', $this->localId())
             ->where('id_mesa', $mesaId)
-            // ✅ sacar "cerrando" para no depender de un ENUM/estado que no existe
             ->whereIn('estado', ['abierta', 'en_cocina', 'lista', 'entregada'])
             ->latest('id')
             ->first();
     }
 
-    private function calcularTotalEstimado(Comanda $comanda): float
+    private function normalizePayload(Request $request): array
     {
-        return (float) $comanda->items()
-            ->where('estado', '!=', 'anulado')
-            ->get()
-            ->sum(fn($it) => (float)$it->precio_snapshot * (float)$it->cantidad);
+        $payload = $request->input('items');
+
+        if (empty($payload)) {
+            $payload = [[
+                'id_item'  => $request->input('id_item'),
+                'cantidad' => $request->input('cantidad', 1),
+                'nota'     => $request->input('nota'),
+            ]];
+        }
+
+        $request->merge(['items' => $payload]);
+
+        return $request->validate([
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.id_item' => ['required', 'integer'],
+            'items.*.cantidad' => ['required', 'numeric', 'min:0.01'],
+            'items.*.nota' => ['nullable', 'string', 'max:255'],
+        ]);
     }
 
     // =========================
-    // Crear comanda para mesa
+    // Crear comanda manual (compat)
     // =========================
     public function createForMesa(Mesa $mesa)
     {
         $this->assertMesaLocal($mesa);
 
-        $user = auth()->user();
         $localId = $this->localId();
+        $user = auth()->user();
 
-        $ya = $this->comandaActivaDeMesa((int)$mesa->id);
+        $ya = $this->comandaActivaDeMesa((int) $mesa->id);
         if ($ya) {
             return redirect()
                 ->route('mozo.dashboard', ['mesa_id' => $mesa->id])
@@ -76,8 +89,9 @@ class ComandaController extends Controller
         }
 
         DB::transaction(function () use ($mesa, $user, $localId) {
-
-            if (in_array($mesa->estado, ['libre', 'reservada'], true)) {
+            // Si la mesa está libre, no debería crear comanda sin ocupar,
+            // pero lo dejamos compatible:
+            if (in_array($mesa->estado, ['libre'], true)) {
                 $mesa->estado = 'ocupada';
             }
 
@@ -102,36 +116,102 @@ class ComandaController extends Controller
     }
 
     // =========================
-    // Agregar items (MULTI)
+    // ✅ NUEVO: Agregar items POR MESA
+    // (si no hay comanda activa, se crea)
+    // =========================
+    public function addItemsForMesa(Request $request, Mesa $mesa)
+    {
+        $this->assertMesaLocal($mesa);
+
+        // Regla de negocio: si está libre => primero ocupar
+        abort_if($mesa->estado === 'libre', 422, 'Primero ocupá la mesa para poder agregar items.');
+
+        $localId = $this->localId();
+        $user = auth()->user();
+
+        $validated = $this->normalizePayload($request);
+
+        $comanda = null;
+
+        DB::transaction(function () use (&$comanda, $validated, $mesa, $localId, $user) {
+
+            $comanda = $this->comandaActivaDeMesa((int) $mesa->id);
+
+            if (!$comanda) {
+                $mesa->atendida_por = $user->id;
+                $mesa->atendida_at  = now();
+                $mesa->save();
+
+                $comanda = Comanda::create([
+                    'id_local'   => $localId,
+                    'id_mesa'    => $mesa->id,
+                    'id_mozo'    => $user->id,
+                    'estado'     => 'abierta',
+                    'observacion' => null,
+                    'opened_at'  => now(),
+                    'cuenta_solicitada' => 0,
+                ]);
+            }
+
+            // Si ya pidió cuenta, no se puede agregar
+            abort_if((int)($comanda->cuenta_solicitada ?? 0) === 1, 422, 'Ya se solicitó la cuenta. No se pueden agregar más items.');
+
+            // Traer items válidos de carta
+            $ids = collect($validated['items'])
+                ->pluck('id_item')
+                ->map(fn($v) => (int)$v)
+                ->unique()
+                ->values();
+
+            $itemsDB = CartaItem::query()
+                ->where('id_local', $localId)
+                ->where('activo', 1)
+                ->whereIn('id', $ids)
+                ->get()
+                ->keyBy('id');
+
+            foreach ($validated['items'] as $row) {
+                $idItem = (int) $row['id_item'];
+                $cantidad = (float) $row['cantidad'];
+                $nota = $row['nota'] ?? null;
+
+                $ci = $itemsDB->get($idItem);
+                abort_if(!$ci, 422, "El item ID {$idItem} no existe en tu carta o está inactivo.");
+
+                ComandaItem::create([
+                    'id_comanda'      => $comanda->id,
+                    'id_item'         => $ci->id,
+                    'nombre_snapshot' => $ci->nombre,
+                    'precio_snapshot' => $ci->precio,
+                    'cantidad'        => $cantidad,
+                    'nota'            => $nota,
+                    'estado'          => 'pendiente',
+                ]);
+            }
+
+            if ($comanda->estado !== 'abierta') {
+                $comanda->estado = 'abierta';
+                $comanda->save();
+            }
+        });
+
+        return redirect()
+            ->route('mozo.dashboard', ['mesa_id' => $mesa->id])
+            ->with('ok', 'Items agregados.');
+    }
+
+    // =========================
+    // Agregar items a comanda existente (multi)
     // =========================
     public function addItem(Request $request, Comanda $comanda)
     {
         $this->assertComandaLocal($comanda);
         $this->ensureComandaActiva($comanda);
 
-        if ((int)($comanda->cuenta_solicitada ?? 0) === 1) {
-            abort(422, 'Ya se solicitó la cuenta. No se pueden agregar más items.');
-        }
+        abort_if((int)($comanda->cuenta_solicitada ?? 0) === 1, 422, 'Ya se solicitó la cuenta. No se pueden agregar más items.');
 
         $localId = $this->localId();
-
-        $payload = $request->input('items');
-        if (empty($payload)) {
-            $payload = [[
-                'id_item'  => $request->input('id_item'),
-                'cantidad' => $request->input('cantidad', 1),
-                'nota'     => $request->input('nota'),
-            ]];
-        }
-
-        $request->merge(['items' => $payload]);
-
-        $validated = $request->validate([
-            'items' => ['required', 'array', 'min:1'],
-            'items.*.id_item' => ['required', 'integer'],
-            'items.*.cantidad' => ['required', 'numeric', 'min:0.01'],
-            'items.*.nota' => ['nullable', 'string', 'max:255'],
-        ]);
+        $validated = $this->normalizePayload($request);
 
         DB::transaction(function () use ($validated, $comanda, $localId) {
 
@@ -179,7 +259,7 @@ class ComandaController extends Controller
     }
 
     // =========================
-    // SOLICITAR CUENTA (MOZO)
+    // Solicitar cuenta
     // =========================
     public function solicitarCuenta(Request $request, Comanda $comanda)
     {
@@ -194,13 +274,11 @@ class ComandaController extends Controller
             return back()->with('ok', 'La cuenta ya fue solicitada.');
         }
 
-        // ✅ subtotal usando snapshot y sin anulados
+        // ✅ subtotal con items reales (ya no hay "anulado")
         $subtotal = (float) $comanda->items()
-            ->where('estado', '!=', 'anulado')
             ->sum(DB::raw('precio_snapshot * cantidad'));
 
         DB::transaction(function () use ($comanda, $data, $subtotal) {
-
             $comanda->update([
                 'cuenta_solicitada'      => 1,
                 'cuenta_solicitada_at'   => now(),
@@ -209,9 +287,6 @@ class ComandaController extends Controller
                 'total_estimado'         => $subtotal,
                 'estado_caja'            => 'pendiente',
             ]);
-
-            // ✅ IMPORTANTE: NO tocar mesa.estado = "cerrando"
-            // La UI de "cerrando" la mostramos por cuenta_solicitada en la comanda.
         });
 
         return back()->with('ok', 'Cuenta solicitada a caja.');
@@ -231,14 +306,12 @@ class ComandaController extends Controller
 
         $this->ensureComandaActiva($comanda);
 
-        if ((int)($comanda->cuenta_solicitada ?? 0) === 1) {
-            abort(422, 'Ya se solicitó la cuenta. No se pueden editar items.');
-        }
+        abort_if((int)($comanda->cuenta_solicitada ?? 0) === 1, 422, 'Ya se solicitó la cuenta. No se pueden editar items.');
 
         $validated = $request->validate([
             'cantidad' => ['nullable', 'numeric', 'min:0.01'],
             'nota' => ['nullable', 'string', 'max:255'],
-            'estado' => ['nullable', 'in:pendiente,en_cocina,listo,entregado,anulado'],
+            'estado' => ['nullable', 'in:pendiente,en_cocina,listo,entregado'],
         ]);
 
         $comandaItem->fill($validated)->save();
@@ -249,7 +322,7 @@ class ComandaController extends Controller
     }
 
     // =========================
-    // Remove item (anular)
+    // ✅ Remove item (DELETE REAL)
     // =========================
     public function removeItem(Request $request, ComandaItem $comandaItem)
     {
@@ -262,16 +335,13 @@ class ComandaController extends Controller
 
         $this->ensureComandaActiva($comanda);
 
-        if ((int)($comanda->cuenta_solicitada ?? 0) === 1) {
-            abort(422, 'Ya se solicitó la cuenta. No se pueden anular items.');
-        }
+        abort_if((int)($comanda->cuenta_solicitada ?? 0) === 1, 422, 'Ya se solicitó la cuenta. No se pueden eliminar items.');
 
-        $comandaItem->estado = 'anulado';
-        $comandaItem->save();
+        $comandaItem->delete();
 
         return redirect()
             ->route('mozo.dashboard', ['mesa_id' => $comanda->id_mesa])
-            ->with('ok', 'Item anulado.');
+            ->with('ok', 'Item eliminado.');
     }
 
     // =========================
@@ -281,7 +351,6 @@ class ComandaController extends Controller
     {
         $this->assertComandaLocal($comanda);
 
-        // ✅ sacar "cerrando"
         $validated = $request->validate([
             'estado' => ['required', 'in:abierta,en_cocina,lista,entregada,cerrada,anulada'],
         ]);
@@ -290,7 +359,6 @@ class ComandaController extends Controller
             abort(422, 'No se puede modificar una comanda cerrada/anulada.');
         }
 
-        // ✅ si pidió cuenta, queda bloqueada hasta que Caja cierre
         if ((int)($comanda->cuenta_solicitada ?? 0) === 1) {
             abort(422, 'Ya se solicitó la cuenta. La comanda queda bloqueada hasta que Caja la cierre.');
         }

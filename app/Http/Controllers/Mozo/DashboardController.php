@@ -4,15 +4,11 @@ namespace App\Http\Controllers\Mozo;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 use App\Models\Mesa;
 use App\Models\Comanda;
-use App\Models\ComandaItem;
 use App\Models\CartaCategoria;
 use App\Models\CartaItem;
-use App\Models\Venta;
-use App\Models\Pago;
 
 class DashboardController extends Controller
 {
@@ -24,11 +20,6 @@ class DashboardController extends Controller
         $idLocal = auth()->user()->id_local ?? null;
         abort_if(empty($idLocal), 403, 'Tu usuario no tiene un local asignado.');
         return (int) $idLocal;
-    }
-
-    private function assertMesaLocal(Mesa $mesa): void
-    {
-        abort_if((int)$mesa->id_local !== $this->localId(), 403, 'Mesa fuera de tu local.');
     }
 
     private function comandaActivaDeMesa(int $mesaId): ?Comanda
@@ -48,9 +39,40 @@ class DashboardController extends Controller
     {
         if (!$comanda) return 0.0;
 
+        // ✅ ya no hay "anulado": si se borra, no suma
         return (float) $comanda->items
-            ->where('estado', '!=', 'anulado')
-            ->sum(fn($it) => (float)$it->precio_snapshot * (float)$it->cantidad);
+            ->sum(fn($it) => (float) $it->precio_snapshot * (float) $it->cantidad);
+    }
+
+    private function mesasDelLocal(int $localId)
+    {
+        return Mesa::query()
+            ->where('id_local', $localId)
+            ->orderByRaw("FIELD(estado,'ocupada','reservada','libre','inactiva','fuera_servicio')")
+            ->orderBy('nombre')
+            ->get();
+    }
+
+    private function comandasActivasPorMesa(int $localId)
+    {
+        return Comanda::query()
+            ->where('id_local', $localId)
+            ->whereNotNull('id_mesa')
+            ->whereIn('estado', ['abierta', 'en_cocina', 'lista', 'entregada'])
+            ->latest('id')
+            ->get()
+            ->keyBy('id_mesa');
+    }
+
+    /**
+     * Compat para el dashboard:
+     * - desktop|mobile (desde tus fetch)
+     * - default desktop (no rompe nada)
+     */
+    private function viewMode(Request $request): string
+    {
+        $view = strtolower((string) $request->get('view', 'desktop'));
+        return in_array($view, ['mobile', 'desktop'], true) ? $view : 'desktop';
     }
 
     // =========================================================
@@ -61,11 +83,7 @@ class DashboardController extends Controller
         $localId = $this->localId();
         $mesaId  = (int) $request->get('mesa_id', 0);
 
-        $mesas = Mesa::query()
-            ->where('id_local', $localId)
-            ->orderByRaw("FIELD(estado,'ocupada','reservada','cerrando','libre','inactiva')")
-            ->orderBy('nombre')
-            ->get();
+        $mesas = $this->mesasDelLocal($localId);
 
         $mesaActiva = null;
         $comandaActiva = null;
@@ -74,7 +92,7 @@ class DashboardController extends Controller
         if ($mesaId > 0) {
             $mesaActiva = $mesas->firstWhere('id', $mesaId);
             if ($mesaActiva) {
-                $comandaActiva = $this->comandaActivaDeMesa($mesaActiva->id);
+                $comandaActiva = $this->comandaActivaDeMesa((int) $mesaActiva->id);
                 $subtotal = $this->calcSubtotal($comandaActiva);
             }
         }
@@ -94,14 +112,7 @@ class DashboardController extends Controller
             ->orderBy('nombre')
             ->get();
 
-        // ✅ mapa mesa_id => comanda activa (para badge "cuenta")
-        $comandasActivasPorMesa = Comanda::query()
-            ->where('id_local', $localId)
-            ->whereNotNull('id_mesa')
-            ->whereIn('estado', ['abierta', 'en_cocina', 'lista', 'entregada']) // activas para mozo
-            ->latest('id')
-            ->get()
-            ->keyBy('id_mesa');
+        $comandasActivasPorMesa = $this->comandasActivasPorMesa($localId);
 
         return view('mozo.dashboard', compact(
             'mesas',
@@ -110,269 +121,104 @@ class DashboardController extends Controller
             'subtotal',
             'cartaCategorias',
             'cartaItems',
-            'comandasActivasPorMesa' // ✅ nuevo
+            'comandasActivasPorMesa'
         ));
     }
 
     // =========================================================
-    // Crear comanda para mesa
-    // POST /mozo/mesas/{mesa}/comandas
-    // route('mozo.comandas.createForMesa', $mesa)
+    // PARTIAL: MESAS
+    // GET /mozo/dashboard/mesas?view=mobile|desktop&mesa_id=XX
+    // Devuelve: mozo.partials.mesa (unificado)
     // =========================================================
-    public function createForMesa(Mesa $mesa)
+    public function partialMesas(Request $request)
     {
-        $this->assertMesaLocal($mesa);
-
-        $user = auth()->user();
         $localId = $this->localId();
+        $view = $this->viewMode($request);
+        $mesaId = (int) $request->get('mesa_id', 0);
 
-        $comandaExistente = $this->comandaActivaDeMesa((int)$mesa->id);
-        if ($comandaExistente) {
-            return redirect()
-                ->route('mozo.dashboard', ['mesa_id' => $mesa->id])
-                ->with('ok', 'Ya existe una comanda activa para esta mesa.');
+        $mesas = $this->mesasDelLocal($localId);
+        $comandasActivasPorMesa = $this->comandasActivasPorMesa($localId);
+
+        $mesaSelected = null;
+        if ($mesaId > 0) {
+            $mesaSelected = $mesas->firstWhere('id', $mesaId);
         }
 
-        DB::transaction(function () use ($mesa, $user, $localId) {
-            // si estaba libre, la pasamos a ocupada (opcional)
-            if (in_array($mesa->estado, ['libre', 'reservada'], true)) {
-                $mesa->estado = 'ocupada';
-                $mesa->save();
-            }
-
-            Comanda::create([
-                'id_local'   => $localId,
-                'id_mesa'    => $mesa->id,
-                'id_mozo'    => $user->id,
-                'estado'     => 'abierta',
-                'observacion' => null,
-                'opened_at'  => now(),
-            ]);
-        });
-
-        return redirect()
-            ->route('mozo.dashboard', ['mesa_id' => $mesa->id])
-            ->with('ok', 'Comanda creada.');
+        return view('mozo.partials.mesa', [
+            'isMobile' => ($view === 'mobile'),
+            'mesas' => $mesas,
+            'comandasActivasPorMesa' => $comandasActivasPorMesa,
+            'mesaSelected' => $mesaSelected,
+        ]);
     }
 
     // =========================================================
-    // Agregar ITEMS (MULTI)
-    // POST /mozo/comandas/{comanda}/items
-    // route('mozo.comandas.items.add', $comanda)
+    // PARTIAL: COMANDA
+    // GET /mozo/dashboard/comanda?mesa_id=XX&view=mobile|desktop
+    // Devuelve: mozo.partials.comanda (unificado)
     // =========================================================
-    public function addItems(Request $request, Comanda $comanda)
+    public function partialComanda(Request $request)
     {
         $localId = $this->localId();
-        abort_if((int)$comanda->id_local !== $localId, 403, 'Comanda fuera de tu local.');
+        $view = $this->viewMode($request);
+        $mesaId  = (int) $request->get('mesa_id', 0);
 
-        // estado válido
-        abort_if(!in_array($comanda->estado, ['abierta', 'en_cocina', 'lista', 'entregada'], true), 422, 'La comanda no está activa.');
+        $mesaActiva = null;
+        $comandaActiva = null;
+        $subtotal = 0.0;
 
-        // Compatibilidad:
-        // - nuevo: items[]
-        // - viejo: id_item/cantidad/nota
-        $payload = $request->input('items');
-
-        if (empty($payload)) {
-            $payload = [[
-                'id_item'  => $request->input('id_item'),
-                'cantidad' => $request->input('cantidad', 1),
-                'nota'     => $request->input('nota'),
-            ]];
-        }
-
-        // Validación manual sobre el payload normalizado
-        $request->merge(['items' => $payload]);
-
-        $validated = $request->validate([
-            'items' => ['required', 'array', 'min:1'],
-            'items.*.id_item' => ['required', 'integer'],
-            'items.*.cantidad' => ['required', 'numeric', 'min:0.01'],
-            'items.*.nota' => ['nullable', 'string', 'max:255'],
-        ], [
-            'items.required' => 'Seleccioná al menos un item.',
-            'items.*.id_item.required' => 'Falta un item.',
-            'items.*.cantidad.min' => 'La cantidad mínima es 0,01.',
-        ]);
-
-        DB::transaction(function () use ($validated, $comanda, $localId) {
-
-            // Traemos todos los carta_items necesarios, asegurando id_local y activo
-            $ids = collect($validated['items'])->pluck('id_item')->map(fn($v) => (int)$v)->unique()->values();
-
-            $itemsDB = CartaItem::query()
+        if ($mesaId > 0) {
+            $mesaActiva = Mesa::query()
                 ->where('id_local', $localId)
-                ->where('activo', 1)
-                ->whereIn('id', $ids)
-                ->get()
-                ->keyBy('id');
+                ->where('id', $mesaId)
+                ->first();
 
-            foreach ($validated['items'] as $row) {
-                $idItem = (int) $row['id_item'];
-                $cantidad = (float) $row['cantidad'];
-                $nota = $row['nota'] ?? null;
-
-                $ci = $itemsDB->get($idItem);
-                abort_if(!$ci, 422, "El item ID {$idItem} no existe, no es del local o está inactivo.");
-
-                ComandaItem::create([
-                    'id_comanda'      => $comanda->id,
-                    'id_item'         => $ci->id,
-                    'nombre_snapshot' => $ci->nombre,
-                    'precio_snapshot' => $ci->precio,
-                    'cantidad'        => $cantidad,
-                    'nota'            => $nota,
-                    'estado'          => 'pendiente',
-                ]);
+            if ($mesaActiva) {
+                $comandaActiva = $this->comandaActivaDeMesa((int) $mesaActiva->id);
+                $subtotal = $this->calcSubtotal($comandaActiva);
             }
-
-            // Si querés, podés marcar comanda "abierta" sí o sí al agregar items
-            if ($comanda->estado !== 'abierta') {
-                $comanda->estado = 'abierta';
-                $comanda->save();
-            }
-        });
-
-        return redirect()
-            ->route('mozo.dashboard', ['mesa_id' => $comanda->id_mesa])
-            ->with('ok', 'Items agregados a la comanda.');
-    }
-
-    // =========================================================
-    // Cobrar comanda: crea venta + pagos, cierra comanda y mesa
-    // POST /mozo/comandas/{comanda}/cobrar
-    // route('mozo.comandas.cobrar', $comanda)
-    // =========================================================
-    public function cobrar(Request $request, Comanda $comanda)
-    {
-        $localId = $this->localId();
-        $user = auth()->user();
-
-        abort_if((int)$comanda->id_local !== $localId, 403, 'Comanda fuera de tu local.');
-        abort_if(!in_array($comanda->estado, ['abierta', 'en_cocina', 'lista', 'entregada'], true), 422, 'La comanda no está activa.');
-
-        $validated = $request->validate([
-            'descuento' => ['nullable', 'numeric', 'min:0'],
-            'recargo'   => ['nullable', 'numeric', 'min:0'],
-            'nota'      => ['nullable', 'string', 'max:255'],
-
-            'pagos' => ['required', 'array', 'min:1'],
-            'pagos.*.tipo' => ['required', 'in:efectivo,debito,transferencia'],
-            'pagos.*.monto' => ['required', 'numeric', 'min:0.01'],
-            'pagos.*.referencia' => ['nullable', 'string', 'max:120'],
-        ], [
-            'pagos.required' => 'Agregá al menos un pago.',
-            'pagos.*.monto.min' => 'El monto mínimo por pago es 0,01.',
-        ]);
-
-        $descuento = (float) ($validated['descuento'] ?? 0);
-        $recargo = (float) ($validated['recargo'] ?? 0);
-
-        // subtotal por snapshot
-        $comanda->load('items');
-        $subtotal = (float) $comanda->items
-            ->where('estado', '!=', 'anulado')
-            ->sum(fn($it) => (float)$it->precio_snapshot * (float)$it->cantidad);
-
-        $total = max(0, $subtotal - $descuento + $recargo);
-
-        $pagado = 0.0;
-        foreach ($validated['pagos'] as $p) {
-            $pagado += (float)$p['monto'];
         }
 
-        abort_if($pagado + 0.00001 < $total, 422, 'El total pagado es menor al total a cobrar.');
-
-        $vuelto = max(0, $pagado - $total);
-
-        $venta = null;
-
-        DB::transaction(function () use (
-            &$venta,
-            $validated,
-            $localId,
-            $user,
-            $comanda,
-            $subtotal,
-            $descuento,
-            $recargo,
-            $total,
-            $pagado,
-            $vuelto
-        ) {
-            // Crear venta
-            $venta = Venta::create([
-                'id_local'     => $localId,
-                'id_comanda'   => $comanda->id,
-                'id_mesa'      => $comanda->id_mesa,
-                'id_mozo'      => $user->id,
-                'estado'       => 'pagada',
-                'subtotal'     => $subtotal,
-                'descuento'    => $descuento,
-                'recargo'      => $recargo,
-                'total'        => $total,
-                'pagado_total' => $pagado,
-                'vuelto'       => $vuelto,
-                'nota'         => $validated['nota'] ?? null,
-                'sold_at'      => now(),
-            ]);
-
-            // Pagos
-            foreach ($validated['pagos'] as $p) {
-                Pago::create([
-                    'id_venta'   => $venta->id,
-                    'tipo'       => $p['tipo'],
-                    'monto'      => (float) $p['monto'],
-                    'referencia' => $p['referencia'] ?? null,
-                    'recibido_at' => now(),
-                ]);
-            }
-
-            // Cerrar comanda
-            $comanda->estado = 'cerrada';
-            $comanda->closed_at = now();
-            $comanda->save();
-
-            // Mesa -> libre (o cerrando si preferís)
-            if ($comanda->id_mesa) {
-                $mesa = Mesa::query()
-                    ->where('id', $comanda->id_mesa)
-                    ->where('id_local', $localId)
-                    ->first();
-
-                if ($mesa) {
-                    $mesa->estado = 'libre';
-                    $mesa->observacion = null;
-                    $mesa->save();
-                }
-            }
-        });
-
-        // Luego del cobro, volvemos al dashboard sin mesa seleccionada
-        // o a la misma mesa (ya libre). Yo lo dejo al dashboard sin mesa.
-        return redirect()
-            ->route('mozo.dashboard')
-            ->with('ok', 'Cobro confirmado. Venta #' . ($venta->id ?? '—') . '.');
+        return view('mozo.partials.comanda', [
+            'isMobile' => ($view === 'mobile'),
+            'mesaSelected' => $mesaActiva,
+            'comanda'      => $comandaActiva,
+            'subtotal'     => $subtotal,
+        ]);
     }
 
-    public function mesasPartial(Request $request)
+    // =========================================================
+    // PARTIAL: CUENTA
+    // GET /mozo/dashboard/cuenta?mesa_id=XX&view=mobile|desktop
+    // Devuelve: mozo.partials.cuenta (unificado)
+    // =========================================================
+    public function partialCuenta(Request $request)
     {
         $localId = $this->localId();
+        $view = $this->viewMode($request);
+        $mesaId  = (int) $request->get('mesa_id', 0);
 
-        $mesas = Mesa::query()
-            ->where('id_local', $localId)
-            ->orderByRaw("FIELD(estado,'ocupada','reservada','libre','inactiva','fuera_servicio')")
-            ->orderBy('nombre')
-            ->get();
+        $mesaActiva = null;
+        $comandaActiva = null;
+        $subtotal = 0.0;
 
-        $comandasActivasPorMesa = Comanda::query()
-            ->where('id_local', $localId)
-            ->whereNotNull('id_mesa')
-            ->whereIn('estado', ['abierta', 'en_cocina', 'lista', 'entregada'])
-            ->latest('id')
-            ->get()
-            ->keyBy('id_mesa');
+        if ($mesaId > 0) {
+            $mesaActiva = Mesa::query()
+                ->where('id_local', $localId)
+                ->where('id', $mesaId)
+                ->first();
 
-        return view('mozo.partials.mesas', compact('mesas', 'comandasActivasPorMesa'));
+            if ($mesaActiva) {
+                $comandaActiva = $this->comandaActivaDeMesa((int) $mesaActiva->id);
+                $subtotal = $this->calcSubtotal($comandaActiva);
+            }
+        }
+
+        return view('mozo.partials.cuenta', [
+            'isMobile' => ($view === 'mobile'),
+            'mesaSelected' => $mesaActiva,
+            'comanda'      => $comandaActiva,
+            'subtotal'     => $subtotal,
+        ]);
     }
 }
