@@ -109,18 +109,7 @@
                     </div>
                 @endif
 
-                @if($com && (int)($com->cuenta_solicitada ?? 0) === 0)
-                    <div class="mt-3 flex items-center justify-end">
-                        <button type="button"
-                            class="px-4 py-2 rounded-xl text-sm font-semibold rf-hover-lift"
-                            style="background: var(--rf-primary); color: white;"
-                            data-action="open-solicitar-cuenta"
-                            data-comanda-id="{{ $com->id }}"
-                        >
-                            Solicitar cuenta
-                        </button>
-                    </div>
-                @endif
+            
             </div>
 
             {{-- Items --}}
@@ -209,43 +198,3 @@
     </div>
 </div>
 
-{{-- Modal solicitar cuenta: simple (sin carpeta extra) --}}
-@if($com)
-<div id="modalSolicitarCuenta" class="hidden fixed inset-0 z-50 items-center justify-center rf-modal-backdrop"
-     style="background: rgba(0,0,0,0.45);">
-    <div class="bg-white w-[92%] max-w-lg rounded-2xl shadow-xl border p-4 animate-fade-in"
-         style="border-color: var(--rf-border);">
-        <div class="flex items-center justify-between">
-            <h3 class="font-bold text-lg">Solicitar cuenta</h3>
-            <button class="p-2 rounded-xl border"
-                style="border-color: var(--rf-border);"
-                data-action="close-modal" data-modal="modalSolicitarCuenta">✕</button>
-        </div>
-
-        <form method="POST" action="{{ route('mozo.comandas.solicitarCuenta', $com) }}" class="mt-4 space-y-3">
-            @csrf
-            <div>
-                <label class="text-sm font-semibold" style="color: var(--rf-text);">Nota (opcional)</label>
-                <input type="text" name="nota"
-                       class="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
-                       style="border-color: var(--rf-border);"
-                       placeholder="Ej: pagar con transferencia / dividir cuenta...">
-            </div>
-
-            <div class="flex items-center justify-end gap-2 pt-2">
-                <button type="button"
-                    class="px-4 py-2 rounded-xl text-sm font-semibold border"
-                    style="border-color: var(--rf-border);"
-                    data-action="close-modal" data-modal="modalSolicitarCuenta">
-                    Cancelar
-                </button>
-                <button type="submit"
-                    class="px-4 py-2 rounded-xl text-sm font-semibold"
-                    style="background: var(--rf-primary); color: white;">
-                    Enviar a caja
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
-@endif
