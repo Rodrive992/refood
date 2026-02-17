@@ -182,21 +182,6 @@
 
                             {{-- Acciones rápidas --}}
                             <div class="mt-4 grid grid-cols-2 gap-2">
-
-                                {{-- Ocupar (modal) --}}
-                                <button
-                                    type="button"
-                                    x-data
-                                    @click="$dispatch('open-ocupar-mesa', {
-                                        id: {{ $mesa->id }},
-                                        nombre: @js($mesa->nombre),
-                                        observacion: @js($mesa->observacion)
-                                    })"
-                                    class="w-full rounded-2xl bg-red-600 px-3 py-2 text-sm font-bold text-white hover:bg-red-700"
-                                >
-                                    Ocupar
-                                </button>
-
                                 {{-- Reservar (modal) --}}
                                 <button
                                     type="button"
@@ -212,12 +197,12 @@
                                 </button>
 
                                 {{-- Liberar --}}
-                                <form method="POST" action="{{ route('admin.mesas.liberar', $mesa) }}" class="col-span-2">
+                                <form method="POST" action="{{ route('admin.mesas.liberar', $mesa) }}">
                                     @csrf
                                     @method('PATCH')
                                     <button type="submit"
                                         class="w-full rounded-2xl bg-green-600 px-3 py-2 text-sm font-bold text-white hover:bg-green-700">
-                                        Liberar (deja libre y limpia obs.)
+                                        Liberar
                                     </button>
                                 </form>
                             </div>
@@ -248,86 +233,6 @@
                 @endforelse
             </div>
 
-        </div>
-    </div>
-
-    {{-- =========================
-        MODAL: OCUPAR (RÁPIDO + OBS)
-    ========================== --}}
-    <div
-        x-data="{
-            open: false,
-            mesaId: null,
-            mesaNombre: '',
-            observacion: '',
-            actionUrl: '',
-            setAction(id){
-                this.actionUrl = '{{ route('admin.mesas.estado', ['mesa' => '___ID___']) }}'.replace('___ID___', id);
-            },
-            focusObs(){
-                this.$nextTick(() => {
-                    const el = this.$refs.obs;
-                    if (el) el.focus();
-                });
-            }
-        }"
-        x-on:open-ocupar-mesa.window="
-            open = true;
-            mesaId = $event.detail.id;
-            mesaNombre = $event.detail.nombre ?? '';
-            observacion = ($event.detail.observacion ?? '');
-            setAction(mesaId);
-            focusObs();
-        "
-        x-show="open"
-        x-cloak
-        class="fixed inset-0 z-50 flex items-center justify-center px-4"
-    >
-        <div class="absolute inset-0 bg-black/40" @click="open=false"></div>
-
-        <div class="relative w-full max-w-lg rounded-3xl bg-white shadow-xl border border-gray-200 overflow-hidden">
-            <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-                <div>
-                    <h3 class="text-lg font-extrabold text-gray-900">Ocupar mesa</h3>
-                    <p class="text-sm text-gray-600" x-text="mesaNombre + ' · ID #' + mesaId"></p>
-                </div>
-                <button @click="open=false"
-                    class="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold hover:bg-gray-50">
-                    Cerrar
-                </button>
-            </div>
-
-            <form method="POST" :action="actionUrl" class="p-5 space-y-4">
-                @csrf
-                @method('PATCH')
-                <input type="hidden" name="estado" value="ocupada">
-
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-1">
-                        Observación (ej: “Juan - 2 personas”)
-                    </label>
-                    <input
-                        x-ref="obs"
-                        type="text"
-                        name="observacion"
-                        x-model="observacion"
-                        placeholder="Juan - 2 personas"
-                        class="w-full rounded-2xl border-gray-200 focus:border-red-400 focus:ring-red-400"
-                    >
-                </div>
-
-                <div class="flex items-center justify-end gap-2 pt-2">
-                    <button type="button" @click="open=false"
-                        class="rounded-2xl border border-gray-200 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50">
-                        Cancelar
-                    </button>
-
-                    <button type="submit"
-                        class="rounded-2xl bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700">
-                        Confirmar ocupada
-                    </button>
-                </div>
-            </form>
         </div>
     </div>
 
