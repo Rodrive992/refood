@@ -5,6 +5,9 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Caja;
+use App\Models\CajaMovimiento;
+use App\Models\Comanda;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -39,7 +42,7 @@ class CajaTurnoController extends Controller
         $userId  = (int) auth()->id();
 
         $data = $request->validate([
-            'observacion' => ['nullable', 'string', 'max:255'],
+            'observacion'    => ['nullable', 'string', 'max:255'],
             'ajuste_ingreso' => ['nullable', 'numeric', 'min:0'],
             'ajuste_salida'  => ['nullable', 'numeric', 'min:0'],
         ]);
@@ -93,7 +96,7 @@ class CajaTurnoController extends Controller
 
             // ✅ Registrar ajustes como movimientos para mantener consistencia
             if ($ingresoInicial > 0) {
-                \App\Models\CajaMovimiento::create([
+                CajaMovimiento::create([
                     'id_local' => $localId,
                     'id_caja'  => $caja->id,
                     'id_user'  => $userId,
@@ -104,7 +107,7 @@ class CajaTurnoController extends Controller
                 ]);
             }
             if ($salidaInicial > 0) {
-                \App\Models\CajaMovimiento::create([
+                CajaMovimiento::create([
                     'id_local' => $localId,
                     'id_caja'  => $caja->id,
                     'id_user'  => $userId,
@@ -130,7 +133,7 @@ class CajaTurnoController extends Controller
         $userId  = (int) auth()->id();
 
         $data = $request->validate([
-            'observacion' => ['nullable', 'string', 'max:255'],
+            'observacion'    => ['nullable', 'string', 'max:255'],
             'ajuste_ingreso' => ['nullable', 'numeric', 'min:0'],
             'ajuste_salida'  => ['nullable', 'numeric', 'min:0'],
         ]);
@@ -143,8 +146,19 @@ class CajaTurnoController extends Controller
                 return back()->with('error', 'No hay un turno de caja abierto para cerrar.');
             }
 
+            // ✅ No permitir cerrar si hay comandas activas
+            $hayComandasActivas = Comanda::query()
+                ->where('id_local', $localId)
+                ->whereIn('estado', ['abierta', 'en_cocina', 'lista', 'entregada', 'cerrando'])
+                ->lockForUpdate()
+                ->exists();
+
+            if ($hayComandasActivas) {
+                return back()->with('error', 'No se puede cerrar el turno: hay comandas abiertas/activas. Cerrá o anulá todas antes de cerrar caja.');
+            }
+
             $ajIng = (float)($data['ajuste_ingreso'] ?? 0);
-            $ajSal = (float)($data['ajuste_salida'] ?? 0);
+            $ajSal = (float)($data['ajuste_salida'  ] ?? 0);
 
             if ($ajIng > 0 && $ajSal > 0) {
                 return back()->with('error', 'Usá solo ingreso o salida de ajuste, no ambos.');
@@ -152,7 +166,7 @@ class CajaTurnoController extends Controller
 
             // ✅ Ajustes finales como movimientos
             if ($ajIng > 0) {
-                \App\Models\CajaMovimiento::create([
+                CajaMovimiento::create([
                     'id_local' => $localId,
                     'id_caja'  => $caja->id,
                     'id_user'  => $userId,
@@ -163,7 +177,7 @@ class CajaTurnoController extends Controller
                 ]);
             }
             if ($ajSal > 0) {
-                \App\Models\CajaMovimiento::create([
+                CajaMovimiento::create([
                     'id_local' => $localId,
                     'id_caja'  => $caja->id,
                     'id_user'  => $userId,
@@ -191,9 +205,19 @@ class CajaTurnoController extends Controller
 
             $caja->save();
 
+            // ✅ Al cerrar el turno: inactivar TODOS los mozos del local
+            User::query()
+                ->where('id_local', $localId)
+                ->where('role', 'mozo')
+                ->update(['estado' => 'inactivo']);
+
             return redirect()
                 ->route('admin.caja.index')
-                ->with('ok', 'Turno de caja cerrado (#' . $caja->turno . '). Efectivo final: ' . number_format((float)$caja->efectivo_turno, 2, ',', '.'));
+                ->with(
+                    'ok',
+                    'Turno de caja cerrado (#' . $caja->turno . '). Mozos inactivados. Efectivo final: ' .
+                    number_format((float)$caja->efectivo_turno, 2, ',', '.')
+                );
         });
     }
 }
