@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Caja;
 use App\Models\CajaMovimiento;
 use App\Models\Comanda;
+use App\Models\Mesa;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -97,24 +98,24 @@ class CajaTurnoController extends Controller
             // ✅ Registrar ajustes como movimientos para mantener consistencia
             if ($ingresoInicial > 0) {
                 CajaMovimiento::create([
-                    'id_local' => $localId,
-                    'id_caja'  => $caja->id,
-                    'id_user'  => $userId,
-                    'tipo'     => 'ingreso',
-                    'monto'    => $ingresoInicial,
-                    'concepto' => 'Ajuste de apertura (ingreso)',
-                    'movido_at'=> now(),
+                    'id_local'  => $localId,
+                    'id_caja'   => $caja->id,
+                    'id_user'   => $userId,
+                    'tipo'      => 'ingreso',
+                    'monto'     => $ingresoInicial,
+                    'concepto'  => 'Ajuste de apertura (ingreso)',
+                    'movido_at' => now(),
                 ]);
             }
             if ($salidaInicial > 0) {
                 CajaMovimiento::create([
-                    'id_local' => $localId,
-                    'id_caja'  => $caja->id,
-                    'id_user'  => $userId,
-                    'tipo'     => 'salida',
-                    'monto'    => $salidaInicial,
-                    'concepto' => 'Ajuste de apertura (salida)',
-                    'movido_at'=> now(),
+                    'id_local'  => $localId,
+                    'id_caja'   => $caja->id,
+                    'id_user'   => $userId,
+                    'tipo'      => 'salida',
+                    'monto'     => $salidaInicial,
+                    'concepto'  => 'Ajuste de apertura (salida)',
+                    'movido_at' => now(),
                 ]);
             }
 
@@ -158,7 +159,7 @@ class CajaTurnoController extends Controller
             }
 
             $ajIng = (float)($data['ajuste_ingreso'] ?? 0);
-            $ajSal = (float)($data['ajuste_salida'  ] ?? 0);
+            $ajSal = (float)($data['ajuste_salida'] ?? 0);
 
             if ($ajIng > 0 && $ajSal > 0) {
                 return back()->with('error', 'Usá solo ingreso o salida de ajuste, no ambos.');
@@ -167,24 +168,24 @@ class CajaTurnoController extends Controller
             // ✅ Ajustes finales como movimientos
             if ($ajIng > 0) {
                 CajaMovimiento::create([
-                    'id_local' => $localId,
-                    'id_caja'  => $caja->id,
-                    'id_user'  => $userId,
-                    'tipo'     => 'ingreso',
-                    'monto'    => $ajIng,
-                    'concepto' => 'Ajuste de cierre (ingreso)',
-                    'movido_at'=> now(),
+                    'id_local'  => $localId,
+                    'id_caja'   => $caja->id,
+                    'id_user'   => $userId,
+                    'tipo'      => 'ingreso',
+                    'monto'     => $ajIng,
+                    'concepto'  => 'Ajuste de cierre (ingreso)',
+                    'movido_at' => now(),
                 ]);
             }
             if ($ajSal > 0) {
                 CajaMovimiento::create([
-                    'id_local' => $localId,
-                    'id_caja'  => $caja->id,
-                    'id_user'  => $userId,
-                    'tipo'     => 'salida',
-                    'monto'    => $ajSal,
-                    'concepto' => 'Ajuste de cierre (salida)',
-                    'movido_at'=> now(),
+                    'id_local'  => $localId,
+                    'id_caja'   => $caja->id,
+                    'id_user'   => $userId,
+                    'tipo'      => 'salida',
+                    'monto'     => $ajSal,
+                    'concepto'  => 'Ajuste de cierre (salida)',
+                    'movido_at' => now(),
                 ]);
             }
 
@@ -192,6 +193,7 @@ class CajaTurnoController extends Controller
             $caja->refreshTotalesCache();
             $caja->refresh();
 
+            // ✅ Cerrar caja
             $caja->estado      = 'cerrada';
             $caja->cerrada_at  = now();
             $caja->cerrada_por = $userId;
@@ -211,11 +213,22 @@ class CajaTurnoController extends Controller
                 ->where('role', 'mozo')
                 ->update(['estado' => 'inactivo']);
 
+            // ✅ Al cerrar el turno: liberar TODAS las mesas del local
+            // (mismo criterio que en CajaController@cobrar)
+            Mesa::query()
+                ->where('id_local', $localId)
+                ->update([
+                    'estado'       => 'libre',
+                    'observacion'  => null,
+                    'atendida_por' => null,
+                    'atendida_at'  => null,
+                ]);
+
             return redirect()
                 ->route('admin.caja.index')
                 ->with(
                     'ok',
-                    'Turno de caja cerrado (#' . $caja->turno . '). Mozos inactivados. Efectivo final: ' .
+                    'Turno de caja cerrado (#' . $caja->turno . '). Mozos inactivados y mesas liberadas. Efectivo final: ' .
                     number_format((float)$caja->efectivo_turno, 2, ',', '.')
                 );
         });
