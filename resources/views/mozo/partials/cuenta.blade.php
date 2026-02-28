@@ -219,18 +219,7 @@
                 @endif
             </div>
 
-            {{-- Botón liberar (opcional, pero útil para mozo) --}}
-            <div class="pt-2 border-t" style="border-color: var(--rf-border);">
-                <form method="POST" action="{{ route('mozo.mesas.liberar', $mesa) }}"
-                      onsubmit="return confirm('¿Liberar {{ $mesa->nombre }}? Se anula la comanda activa (si existe).');">
-                    @csrf
-                    <button type="submit"
-                            class="w-full px-4 py-3 rounded-2xl text-sm font-extrabold border rf-hover-lift"
-                            style="border-color: var(--rf-border); background: rgba(239,68,68,0.08); color: var(--rf-error);">
-                        Liberar mesa
-                    </button>
-                </form>
-            </div>
+           
         @endif
     </div>
 </div>

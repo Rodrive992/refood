@@ -9,9 +9,32 @@
             <p class="text-sm text-slate-600">
                 Activas del local (admin). <strong>El cobro se realiza desde CAJA</strong>.
             </p>
+
+            <div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                <span class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-slate-100 text-slate-700">
+                    <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                    Auto-refresco: <b id="rfStatus">ON</b>
+                </span>
+
+                <button id="rfToggleBtn"
+                        type="button"
+                        class="px-3 py-1.5 rounded-full border border-slate-200 bg-white hover:bg-slate-50 font-semibold text-slate-700">
+                    Pausar
+                </button>
+
+                <button id="rfSoundBtn"
+                        type="button"
+                        class="px-3 py-1.5 rounded-full border border-slate-200 bg-white hover:bg-slate-50 font-semibold text-slate-700">
+                    Sonido: ON
+                </button>
+
+                <span class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-slate-100 text-slate-700">
+                    Última sync: <b id="rfLastSync">—</b>
+                </span>
+            </div>
         </div>
 
-        <form class="flex flex-col sm:flex-row gap-2" method="GET" action="{{ route('admin.comandas.index') }}">
+        <form id="filterForm" class="flex flex-col sm:flex-row gap-2" method="GET" action="{{ route('admin.comandas.index') }}">
             <input type="hidden" name="estado" value="{{ $estado }}">
 
             <div class="flex gap-2">
@@ -47,132 +70,196 @@
         </div>
     @endif
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        @forelse($comandas as $c)
-            @php
-                $cuentaPedida = (int)($c->cuenta_solicitada ?? 0) === 1;
-                $estadoCaja = $c->estado_caja ?? null; // opcional (pendiente/pagada/anulada...)
-            @endphp
-
-            {{-- ✅ Abre directamente CAJA --}}
-            <a href="{{ route('admin.caja.show', $c) }}"
-               class="group rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition overflow-hidden">
-
-                <div class="p-4 md:p-5 flex items-start justify-between gap-4">
-                    <div class="min-w-0 flex-1">
-                        <div class="flex items-center gap-2 flex-wrap">
-                            <div class="text-base md:text-lg font-extrabold text-slate-900">
-                                #{{ $c->id }}
-                            </div>
-
-                            <span class="text-xs font-semibold px-2 py-1 rounded-full bg-slate-100 text-slate-700">
-                                {{ $c->estado }}
-                            </span>
-
-                            {{-- ✅ Badge cuenta solicitada --}}
-                            @if($cuentaPedida)
-                                <span class="text-xs font-extrabold px-2 py-1 rounded-full bg-emerald-100 text-emerald-800">
-                                    💳 Cuenta solicitada
-                                </span>
-                            @endif
-
-                            {{-- ✅ Badge estado_caja (si lo usás) --}}
-                            @if(!empty($estadoCaja))
-                                <span class="text-xs font-semibold px-2 py-1 rounded-full bg-blue-100 text-blue-800">
-                                    Caja: {{ $estadoCaja }}
-                                </span>
-                            @endif
-                        </div>
-
-                        <div class="mt-1 text-sm text-slate-600">
-                            Mesa:
-                            <span class="font-semibold text-slate-800">
-                                {{ $c->mesa->nombre ?? 'Sin mesa' }}
-                            </span>
-                            · Mozo:
-                            <span class="font-semibold text-slate-800">
-                                {{ $c->mozo->name ?? '—' }}
-                            </span>
-                        </div>
-
-                        @if($c->observacion)
-                            <div class="mt-2 text-sm text-slate-700 line-clamp-2">
-                                <span class="font-semibold">Obs:</span> {{ $c->observacion }}
-                            </div>
-                        @endif
-
-                        {{-- ✅ Preview de items + notas (SIN tocar controller) --}}
-                        @php
-                            $previewItems = $c->items()
-                                ->select(['id','nombre_snapshot','cantidad','nota'])
-                                ->orderBy('id', 'asc')
-                                ->take(3)
-                                ->get();
-
-                            $totalItems = (int)($c->items_count ?? 0);
-                            $previewCount = $previewItems->count();
-                            $faltan = max(0, $totalItems - $previewCount);
-                        @endphp
-
-                        @if($previewCount > 0)
-                            <div class="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                                <div class="text-xs font-bold text-slate-600 mb-1">Items solicitados</div>
-
-                                <ul class="space-y-1">
-                                    @foreach($previewItems as $it)
-                                        <li class="text-sm text-slate-800 leading-snug">
-                                            <span class="font-extrabold">
-                                                {{ rtrim(rtrim(number_format((float)$it->cantidad, 2, '.', ''), '0'), '.') }}
-                                            </span>
-                                            <span class="font-semibold">×</span>
-                                            <span class="font-semibold">{{ $it->nombre_snapshot }}</span>
-
-                                            @if(!empty($it->nota))
-                                                <span class="text-xs text-slate-600 italic">
-                                                    — “{{ $it->nota }}”
-                                                </span>
-                                            @endif
-                                        </li>
-                                    @endforeach
-                                </ul>
-
-                                @if($faltan > 0)
-                                    <div class="mt-1 text-xs font-semibold text-slate-500">
-                                        +{{ $faltan }} más…
-                                    </div>
-                                @endif
-                            </div>
-                        @endif
-                    </div>
-
-                    <div class="text-right shrink-0">
-                        <div class="text-sm text-slate-600">Items</div>
-                        <div class="text-lg font-extrabold text-slate-900">{{ (int)$c->items_count }}</div>
-                        <div class="text-xs text-slate-500 mt-1">
-                            {{ \Carbon\Carbon::parse($c->opened_at)->format('d/m H:i') }}
-                        </div>
-                    </div>
-                </div>
-
-                <div class="px-4 md:px-5 pb-4 md:pb-5">
-                    <div class="rounded-xl border px-3 py-2 text-sm transition
-                        {{ $cuentaPedida
-                            ? 'border-emerald-200 bg-emerald-50 text-emerald-900 group-hover:bg-emerald-100'
-                            : 'border-slate-200 bg-slate-50 text-slate-700 group-hover:bg-emerald-50 group-hover:border-emerald-200'
-                        }}">
-                        Abrir en caja → Imprimir cuenta / Cobrar
-                    </div>
-                </div>
-            </a>
-        @empty
-            <div class="col-span-full rounded-2xl border border-slate-200 bg-white p-6 text-slate-700">
-                No hay comandas para los filtros seleccionados.
-            </div>
-        @endforelse
+    {{-- Contenedor que vamos a refrescar por AJAX --}}
+    <div id="cardsWrap">
+        @include('admin.comandas._poll_cards', ['comandas' => $comandas])
     </div>
 
-    <div class="mt-6">
+    <div class="mt-6" id="paginationWrap">
         {{ $comandas->links() }}
     </div>
 </div>
+
+{{-- Audio (beep) usando WebAudio. No requiere archivos --}}
+<script>
+(function () {
+    const POLL_EVERY_MS = 3000; // 3s
+    const POLL_URL = @json(route('admin.comandas.poll'));
+
+    const cardsWrap = document.getElementById('cardsWrap');
+    const paginationWrap = document.getElementById('paginationWrap');
+
+    const rfStatus = document.getElementById('rfStatus');
+    const rfLastSync = document.getElementById('rfLastSync');
+
+    const rfToggleBtn = document.getElementById('rfToggleBtn');
+    const rfSoundBtn  = document.getElementById('rfSoundBtn');
+
+    const filterForm = document.getElementById('filterForm');
+
+    let enabled = true;
+    let soundEnabled = true;
+    let timer = null;
+
+    // usamos "total" del paginador para detectar nuevas
+    let lastTotal = @json((int)$comandas->total());
+
+    function nowStr(){
+        const d = new Date();
+        const hh = String(d.getHours()).padStart(2,'0');
+        const mm = String(d.getMinutes()).padStart(2,'0');
+        const ss = String(d.getSeconds()).padStart(2,'0');
+        return `${hh}:${mm}:${ss}`;
+    }
+
+    function setStatus() {
+        rfStatus.textContent = enabled ? 'ON' : 'OFF';
+        rfToggleBtn.textContent = enabled ? 'Pausar' : 'Reanudar';
+    }
+
+    function setSoundLabel() {
+        rfSoundBtn.textContent = soundEnabled ? 'Sonido: ON' : 'Sonido: OFF';
+    }
+
+    function beep(){
+        if(!soundEnabled) return;
+
+        try{
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if(!AudioCtx) return;
+
+            const ctx = new AudioCtx();
+            const o = ctx.createOscillator();
+            const g = ctx.createGain();
+
+            o.type = 'sine';
+            o.frequency.value = 880;
+            g.gain.value = 0.08;
+
+            o.connect(g);
+            g.connect(ctx.destination);
+
+            o.start();
+
+            setTimeout(() => {
+                o.stop();
+                ctx.close();
+            }, 180);
+        } catch(e){
+            // si el navegador bloquea audio hasta interacción del usuario, no rompemos nada
+        }
+    }
+
+    function buildQueryFromFilters() {
+        const fd = new FormData(filterForm);
+        const params = new URLSearchParams();
+        for (const [k,v] of fd.entries()) {
+            if (v !== null && String(v).trim() !== '') params.set(k, v);
+        }
+
+        // si el usuario está en otra página del paginador, respetamos page actual
+        const url = new URL(window.location.href);
+        const page = url.searchParams.get('page');
+        if (page) params.set('page', page);
+
+        return params.toString();
+    }
+
+    async function poll() {
+        if (!enabled) return;
+
+        const qs = buildQueryFromFilters();
+        const url = POLL_URL + (qs ? ('?' + qs) : '');
+
+        try{
+            const res = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json'
+                },
+                cache: 'no-store'
+            });
+
+            if(!res.ok) return;
+
+            const data = await res.json();
+            if(!data || !data.ok) return;
+
+            // Render HTML nuevo
+            if (typeof data.cards_html === 'string') {
+                cardsWrap.innerHTML = data.cards_html;
+            }
+            if (typeof data.pagination_html === 'string') {
+                paginationWrap.innerHTML = data.pagination_html;
+            }
+
+            // Sonido si entra nueva comanda
+            const total = parseInt(data.total || 0, 10);
+            if (total > lastTotal) {
+                beep();
+            }
+            lastTotal = total;
+
+            rfLastSync.textContent = nowStr();
+        } catch(e){
+            // silencioso
+        }
+    }
+
+    function start() {
+        if (timer) clearInterval(timer);
+        timer = setInterval(poll, POLL_EVERY_MS);
+    }
+
+    // Toggle refresco
+    rfToggleBtn.addEventListener('click', function(){
+        enabled = !enabled;
+        setStatus();
+        if (enabled) poll();
+    });
+
+    // Toggle sonido
+    rfSoundBtn.addEventListener('click', function(){
+        soundEnabled = !soundEnabled;
+        setSoundLabel();
+
+        // "desbloquear" audio con una interacción, por si el navegador lo exige:
+        if(soundEnabled) beep();
+    });
+
+    // Si cambian filtros, reseteamos el contador total y forzamos poll
+    filterForm.addEventListener('submit', function(){
+        // deja que navegue normal al index con querystring
+        // (pero el auto-refresco ya arranca sobre ese estado)
+    });
+
+    // Paginación: capturamos click para no recargar página (opcional)
+    // Si preferís recargar normal, podés borrar todo este bloque.
+    document.addEventListener('click', function(e){
+        const a = e.target.closest('#paginationWrap a');
+        if(!a) return;
+
+        e.preventDefault();
+        const href = a.getAttribute('href');
+        if(!href) return;
+
+        const u = new URL(href, window.location.origin);
+        const page = u.searchParams.get('page') || '1';
+
+        const current = new URL(window.location.href);
+        current.searchParams.set('page', page);
+        window.history.pushState({}, '', current.toString());
+
+        poll();
+    });
+
+    setStatus();
+    setSoundLabel();
+    start();
+
+    // primer poll apenas carga
+    poll();
+})();
+</script>
 @endsection

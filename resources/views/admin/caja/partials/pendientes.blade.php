@@ -1,5 +1,4 @@
 @php
-  // Para detectar cambios en el front
   $count = $comandasPendientes->count();
 @endphp
 
@@ -35,9 +34,9 @@
                 <div class="text-xs text-gray-500 mt-1">estimado</div>
 
                 <div class="mt-3 flex flex-col sm:flex-row gap-2 justify-end">
-                    <a href="{{ route('admin.caja.cuenta', $c) }}"
+                    <a href="{{ route('admin.caja.cuenta', $c) }}" target="_blank"
                        class="px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-semibold hover:opacity-90">
-                        Imprimir cuenta
+                        🖨️ Imprimir cuenta
                     </a>
 
                     <a href="{{ route('admin.caja.show', $c) }}"

@@ -1,4 +1,5 @@
 <?php
+// app/Models/Venta.php
 
 namespace App\Models;
 
@@ -12,6 +13,7 @@ class Venta extends Model
 
     protected $fillable = [
         'id_local',
+        'id_caja',       // ✅ NUEVO
         'id_comanda',
         'id_mesa',
         'id_mozo',
@@ -30,19 +32,20 @@ class Venta extends Model
     ];
 
     protected $casts = [
-        'id_local' => 'integer',
+        'id_local'   => 'integer',
+        'id_caja'    => 'integer',
         'id_comanda' => 'integer',
-        'id_mesa' => 'integer',
-        'id_mozo' => 'integer',
+        'id_mesa'    => 'integer',
+        'id_mozo'    => 'integer',
 
-        'subtotal' => 'decimal:2',
-        'descuento' => 'decimal:2',
-        'recargo' => 'decimal:2',
-        'total' => 'decimal:2',
+        'subtotal'     => 'decimal:2',
+        'descuento'    => 'decimal:2',
+        'recargo'      => 'decimal:2',
+        'total'        => 'decimal:2',
         'pagado_total' => 'decimal:2',
-        'vuelto' => 'decimal:2',
+        'vuelto'       => 'decimal:2',
 
-        'sold_at' => 'datetime',
+        'sold_at'    => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
@@ -58,10 +61,15 @@ class Venta extends Model
         return $this->belongsTo(Local::class, 'id_local');
     }
 
+    public function caja(): BelongsTo
+    {
+        return $this->belongsTo(Caja::class, 'id_caja');
+    }
+
     public function comanda(): BelongsTo
     {
         return $this->belongsTo(Comanda::class, 'id_comanda');
-    }   
+    }
 
     public function mesa(): BelongsTo
     {
@@ -91,7 +99,6 @@ class Venta extends Model
 
     public function getSaldoAttribute(): float
     {
-        // total - pagado_total (nunca negativo)
         $saldo = (float)$this->total - (float)$this->pagado_total;
         return $saldo > 0 ? $saldo : 0.0;
     }

@@ -14,6 +14,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role'  => \App\Http\Middleware\RoleMiddleware::class,
             'local' => \App\Http\Middleware\EnsureLocalContext::class,
+            'mozo.activo' => \App\Http\Middleware\EnsureMozoActivo::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

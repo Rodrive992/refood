@@ -30,7 +30,20 @@ class AuthenticatedSessionController extends Controller
 
         $user = $request->user();
 
-        if ($user->role === 'admin') {
+        // ✅ BLOQUEO: mozo inactivo no puede entrar
+        if (($user->role ?? null) === 'mozo' && (string)($user->estado ?? 'activo') !== 'activo') {
+
+            Auth::guard('web')->logout();
+
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return back()->withErrors([
+                'email' => 'Tu usuario está inactivo. Pedí al administrador que te habilite.',
+            ]);
+        }
+
+        if (($user->role ?? null) === 'admin') {
             return redirect()->route('admin.dashboard');
         }
 

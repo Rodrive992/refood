@@ -89,4 +89,75 @@ class ComandaController extends Controller
             ->route('admin.caja.show', $comanda)
             ->with('ok', 'El cobro se realiza desde CAJA.');
     }
+
+    /**
+     * ✅ Poll AJAX: refresco automático del index SIN recargar.
+     * Devuelve HTML renderizado (cards y paginación) + contadores para sonido.
+     */
+    public function poll(Request $request)
+    {
+        $localId = $this->localId();
+
+        $estado = $request->get('estado', 'activas'); // activas | todas | cerradas
+        $mesaId = $request->get('mesa_id');
+        $q = trim((string) $request->get('q', ''));
+        $page = max(1, (int) $request->get('page', 1));
+
+        $query = Comanda::query()
+            ->where('id_local', $localId)
+            ->with(['mesa', 'mozo'])
+            ->withCount(['items as items_count'])
+            ->orderByDesc('opened_at');
+
+        if ($estado === 'activas') {
+            $query->whereIn('estado', ['abierta','en_cocina','lista','entregada','cerrando']);
+        } elseif ($estado === 'cerradas') {
+            $query->whereIn('estado', ['cerrada','anulada']);
+        }
+
+        if (!empty($mesaId)) {
+            $query->where('id_mesa', $mesaId);
+        }
+
+        if ($q !== '') {
+            $query->where(function ($sub) use ($q) {
+                if (ctype_digit($q)) {
+                    $sub->orWhere('id', (int)$q);
+                }
+                $sub->orWhere('observacion', 'like', "%{$q}%");
+            });
+        }
+
+        $comandas = $query->paginate(20, ['*'], 'page', $page)->withQueryString();
+
+        $cardsHtml = view('admin.comandas._poll_cards', [
+            'comandas' => $comandas,
+        ])->render();
+
+        $paginationHtml = $comandas->links()->render();
+
+        return response()->json([
+            'ok' => true,
+            'total' => (int) $comandas->total(),
+            'page' => (int) $comandas->currentPage(),
+            'cards_html' => $cardsHtml,
+            'pagination_html' => $paginationHtml,
+            'ts' => now()->toISOString(),
+        ]);
+    }
+
+    /**
+     * ✅ Imprimir comanda (ticket cocina).
+     * No toca CAJA. Es solo impresión.
+     */
+    public function print(Comanda $comanda)
+    {
+        $localId = $this->localId();
+        abort_unless((int)$comanda->id_local === $localId, 403);
+
+        // Cargar relaciones y items
+        $comanda->load(['mesa', 'mozo', 'items']);
+
+        return view('admin.comandas.print', compact('comanda'));
+    }
 }

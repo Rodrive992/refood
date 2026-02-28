@@ -4,6 +4,8 @@
     $mesa = $mesaSelected ?? null;
     $com = $comanda ?? null;
     $sub = $subtotal ?? 0;
+
+    $cuentaPedida = $com && (int)($com->cuenta_solicitada ?? 0) === 1;
 @endphp
 
 <div class="bg-white rounded-2xl border rf-scrollbar" style="border-color: var(--rf-border);">
@@ -66,6 +68,8 @@
                         style="background: var(--rf-secondary); color: white;"
                         data-action="add-items"
                         data-mesa-id="{{ $mesa->id }}"
+                        data-locked="{{ $cuentaPedida ? '1' : '0' }}"
+                        title="{{ $cuentaPedida ? 'Cuenta solicitada: solo administración puede agregar.' : '' }}"
                     >
                         Agregar items
                     </button>
@@ -102,14 +106,12 @@
                     </div>
                 </div>
 
-                @if($com && (int)($com->cuenta_solicitada ?? 0) === 1)
+                @if($cuentaPedida)
                     <div class="mt-3 text-xs px-3 py-2 rounded-xl"
                          style="background: rgba(245,158,11,0.12); color: var(--rf-warning);">
-                        Cuenta solicitada. La comanda queda bloqueada hasta que Caja la cierre.
+                        Cuenta solicitada. Solo administración puede agregar items y cerrar en caja.
                     </div>
                 @endif
-
-            
             </div>
 
             {{-- Items --}}
@@ -121,7 +123,7 @@
                          style="border-color: var(--rf-border); color: var(--rf-text-light);">
                         No hay items todavía.
                         @if(($mesa->estado ?? '') !== 'libre')
-                            Tocá <b>Agregar items</b>.
+                            Tocá <b>Agregar items</b> para cargarlos.
                         @else
                             Primero <b>Ocupar</b>.
                         @endif
@@ -129,8 +131,7 @@
                 @else
                     <div class="space-y-2">
                         @foreach($com->items as $it)
-                            <div class="rounded-2xl border p-3"
-                                 style="border-color: var(--rf-border);">
+                            <div class="rounded-2xl border p-3" style="border-color: var(--rf-border);">
                                 <div class="flex items-start justify-between gap-3">
                                     <div class="min-w-0">
                                         <div class="font-semibold truncate" style="color: var(--rf-text);">
@@ -161,40 +162,25 @@
                                     </div>
                                 </div>
 
-                                {{-- acciones item (solo si NO pidió cuenta) --}}
-                                @if($com && (int)($com->cuenta_solicitada ?? 0) === 0)
-                                    <div class="mt-3 flex items-center justify-end gap-2">
-                                        <form method="POST" action="{{ route('mozo.comandas.items.delete', $it) }}"
-                                              onsubmit="return confirm('¿Eliminar este item?')">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit"
-                                                class="px-3 py-2 rounded-xl text-xs font-semibold border rf-hover-lift"
-                                                style="border-color: var(--rf-border); color: var(--rf-error);">
-                                                Eliminar
-                                            </button>
-                                        </form>
-                                    </div>
-                                @endif
+                                {{-- ❌ mozo NO puede eliminar items (nunca) --}}
                             </div>
                         @endforeach
                     </div>
                 @endif
             </div>
 
-            {{-- Carta rápida (solo mobile, opcional) --}}
+            {{-- Carta rápida (solo mobile) --}}
             @if($isMobile && ($mesa->estado ?? '') !== 'libre')
                 <div class="mt-4 rounded-2xl border p-4"
                      style="border-color: var(--rf-border); background: var(--rf-bg);">
                     <div class="text-sm font-bold" style="color: var(--rf-text);">
-                        Agregar rápido
+                        Carga rápida
                     </div>
                     <div class="text-xs mt-1" style="color: var(--rf-text-light);">
-                        Usá el botón “Agregar items” para buscar por categoría y cargar cantidades.
+                        Entrá a <b>Agregar items</b>, elegí categoría y tocá items para acumularlos. Guardás al final.
                     </div>
                 </div>
             @endif
         @endif
     </div>
 </div>
-
