@@ -15,6 +15,7 @@
     $estadoMesa = $hasMesa ? (string)($mesa->estado ?? '') : '';
     $mesaLibre = $estadoMesa === 'libre';
 
+    // Mantengo tu formato (sin $ y sin decimales)
     $subtotalFmt = number_format((float)($subtotal ?? 0), 0, '.', '.');
 @endphp
 
@@ -86,7 +87,10 @@
                 <div class="text-right">
                     @if($hasComanda)
                         <div class="text-xs" style="color: var(--rf-text-light);">
-                            Estado comanda: <span class="font-semibold" style="color: var(--rf-text);">{{ $comanda->estado }}</span>
+                            Estado comanda:
+                            <span class="font-semibold" style="color: var(--rf-text);">
+                                {{ $comanda->estado }}
+                            </span>
                         </div>
                         @if($cuentaPedida)
                             <div class="text-xs mt-1" style="color: var(--rf-text-light);">
@@ -131,9 +135,14 @@
                                 La cuenta ya fue enviada a caja. Hasta que caja cierre la comanda, no se pueden agregar/editar items.
                             </div>
                         @else
-                            {{-- Botón que abre modal --}}
+                            {{-- Botón que abre modal GLOBAL y setea datos actuales --}}
                             <button type="button"
-                                    data-action="open-solicitar-cuenta"
+                                    data-action="open-cuenta-modal"
+                                    data-modal="cuentaModal"
+                                    data-comanda-id="{{ $comanda->id }}"
+                                    data-mesa-nombre="{{ $mesa->nombre }}"
+                                    data-subtotal-fmt="{{ $subtotalFmt }}"
+                                    data-action-url="{{ route('mozo.comandas.solicitarCuenta', $comanda) }}"
                                     class="w-full px-4 py-3 rounded-2xl text-sm font-extrabold rf-hover-lift"
                                     style="background: var(--rf-primary); color: white;">
                                 Solicitar cuenta a caja
@@ -142,84 +151,10 @@
                             <div class="text-xs" style="color: var(--rf-text-light);">
                                 Podés dejar una nota para caja (ej: “paga con transferencia”, “separar bebidas”).
                             </div>
-
-                            {{-- Modal solicitar cuenta --}}
-                            @push('modals')
-                                <div id="modalSolicitarCuenta" class="rf-modal-backdrop hidden fixed inset-0 z-50 items-end md:items-center justify-center"
-                                     style="background: rgba(0,0,0,0.45);">
-                                    <div class="w-full md:max-w-lg md:rounded-3xl md:mx-4 rounded-t-3xl bg-white border animate-fade-in"
-                                         style="border-color: var(--rf-border);">
-                                        <div class="p-4 border-b flex items-center justify-between"
-                                             style="border-color: var(--rf-border);">
-                                            <div>
-                                                <div class="text-xs font-bold uppercase tracking-wide" style="color: var(--rf-text-light);">
-                                                    Solicitar cuenta
-                                                </div>
-                                                <div class="text-lg font-extrabold" style="color: var(--rf-text);">
-                                                    {{ $mesa->nombre }} • Comanda #{{ $comanda->id }}
-                                                </div>
-                                            </div>
-                                            <button type="button"
-                                                    data-action="close-modal"
-                                                    data-modal="modalSolicitarCuenta"
-                                                    class="h-10 w-10 rounded-2xl border flex items-center justify-center rf-hover-lift"
-                                                    style="border-color: var(--rf-border); background: var(--rf-white); color: var(--rf-text);">
-                                                ✕
-                                            </button>
-                                        </div>
-
-                                        <form method="POST" action="{{ route('mozo.comandas.solicitarCuenta', $comanda) }}" class="p-4 space-y-4">
-                                            @csrf
-
-                                            <div class="rounded-2xl border p-4"
-                                                 style="border-color: var(--rf-border); background: var(--rf-bg);">
-                                                <div class="text-xs font-bold uppercase tracking-wide" style="color: var(--rf-text-light);">
-                                                    Total estimado
-                                                </div>
-                                                <div class="text-2xl font-extrabold" style="color: var(--rf-text);">
-                                                    {{ $subtotalFmt }}
-                                                </div>
-                                            </div>
-
-                                            <div>
-                                                <label class="block text-sm font-bold mb-2" style="color: var(--rf-text);">
-                                                    Nota para caja (opcional)
-                                                </label>
-                                                <input type="text" name="nota" maxlength="255"
-                                                       class="w-full rounded-2xl border px-4 py-3 text-sm focus:outline-none"
-                                                       style="border-color: var(--rf-border); background: white;"
-                                                       placeholder="Ej: paga con transferencia / separar bebidas">
-                                            </div>
-
-                                            <div class="flex items-center gap-2">
-                                                <button type="button"
-                                                        data-action="close-modal"
-                                                        data-modal="modalSolicitarCuenta"
-                                                        class="flex-1 px-4 py-3 rounded-2xl text-sm font-extrabold border"
-                                                        style="border-color: var(--rf-border); background: var(--rf-white); color: var(--rf-text);">
-                                                    Cancelar
-                                                </button>
-
-                                                <button type="submit"
-                                                        class="flex-1 px-4 py-3 rounded-2xl text-sm font-extrabold rf-hover-lift"
-                                                        style="background: var(--rf-primary); color: white;">
-                                                    Confirmar
-                                                </button>
-                                            </div>
-
-                                            <div class="text-xs" style="color: var(--rf-text-light);">
-                                                Al solicitar la cuenta, la comanda queda bloqueada para cambios hasta que caja la cierre.
-                                            </div>
-                                        </form>
-                                    </div>
-                                </div>
-                            @endpush
                         @endif
                     @endif
                 @endif
             </div>
-
-           
         @endif
     </div>
 </div>

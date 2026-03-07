@@ -28,7 +28,7 @@
 </head>
 <body>
 
-    <div class="no-print btnbar">
+    <div id="btnbar" class="no-print btnbar">
         <button class="btn btnPrimary" onclick="window.print()">🖨️ Imprimir</button>
         <a class="btn" href="{{ route('admin.caja.index') }}" style="text-decoration:none; color:#0f172a;">Volver</a>
     </div>
@@ -36,7 +36,12 @@
     @php
         $mesaNombre = $comanda->mesa->nombre ?? 'Sin mesa';
         $mozoNombre = $comanda->mozo->name ?? ('#'.$comanda->id_mozo);
-        $sol = optional($comanda->cuenta_solicitada_at)->format('d/m/Y H:i');
+
+        $sol = $comanda->cuenta_solicitada_at
+            ? \Carbon\Carbon::parse($comanda->cuenta_solicitada_at)->timezone('America/Argentina/Buenos_Aires')->format('d/m/Y H:i')
+            : '—';
+
+        $impreso = now()->timezone('America/Argentina/Buenos_Aires')->format('d/m/Y H:i');
     @endphp
 
     <div class="wrap">
@@ -58,11 +63,11 @@
         <div class="body">
             <table>
                 <thead>
-                    <tr>
-                        <th>Item</th>
-                        <th class="right">Cant</th>
-                        <th class="right">Importe</th>
-                    </tr>
+                <tr>
+                    <th>Item</th>
+                    <th class="right">Cant</th>
+                    <th class="right">Importe</th>
+                </tr>
                 </thead>
                 <tbody>
                 @foreach($comanda->items->where('estado','!=','anulado') as $it)
@@ -91,16 +96,51 @@
             </div>
 
             <div class="muted" style="margin-top:10px;">
-                Impreso: {{ now()->format('d/m/Y H:i') }}
+                Impreso: {{ $impreso }} (AR)
             </div>
         </div>
     </div>
 
     <script>
-        // auto print suave
-        window.addEventListener('load', function(){
-            setTimeout(() => { try{ window.print(); }catch(e){} }, 350);
-        });
+        (function(){
+            // si viene en iframe: ocultar barra
+            try{
+                if (window.top && window !== window.top) {
+                    const bar = document.getElementById('btnbar');
+                    if (bar) bar.style.display = 'none';
+                }
+            }catch(e){}
+
+            let sent = false;
+            function notifyParent(){
+                if(sent) return;
+                sent = true;
+                try {
+                    window.parent && window.parent.postMessage({
+                        type: 'RF_PRINT_DONE',
+                        mode: 'preticket',
+                        comanda_id: {{ (int)$comanda->id }},
+                    }, '*');
+                } catch(e){}
+            }
+
+            function doPrint(){
+                try{ window.focus(); }catch(e){}
+                try{ window.print(); }catch(e){}
+            }
+
+            window.addEventListener('load', function(){
+                // imprimir lo más rápido posible
+                setTimeout(doPrint, 50);
+
+                // fallback fuerte: si afterprint no dispara, avisar igual
+                setTimeout(notifyParent, 700);
+            });
+
+            window.addEventListener('afterprint', function(){
+                notifyParent();
+            });
+        })();
     </script>
 </body>
 </html>

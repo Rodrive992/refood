@@ -17,7 +17,7 @@ use App\Http\Controllers\Admin\CajaHistorialController;
 use App\Http\Controllers\Admin\CajaTurnoController;
 use App\Http\Controllers\Admin\CajaMovimientoController;
 use App\Http\Controllers\Admin\MozosController;
-
+use App\Http\Controllers\Admin\NavController;
 /*
 |--------------------------------------------------------------------------
 | MOZO
@@ -72,6 +72,7 @@ Route::middleware(['auth'])->group(function () {
         ->group(function () {
 
             Route::view('/', 'admin.dashboard')->name('dashboard');
+            Route::get('/nav/poll', [NavController::class, 'poll'])->name('nav.poll');
 
             /*
             |--------------------------------------------------------------------------
@@ -126,6 +127,7 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/caja/pendientes', [CajaController::class, 'pendientes'])->name('caja.pendientes');
 
             Route::get('/caja/pendientes-poll', [CajaController::class, 'pendientesPoll'])->name('caja.pendientesPoll');
+            Route::get('/caja/mesas-poll', [CajaController::class, 'mesasPoll'])->name('caja.mesasPoll');
 
             Route::get('/caja/comandas/{comanda}', [CajaController::class, 'show'])->name('caja.show');
             Route::get('/caja/comandas/{comanda}/cuenta', [CajaController::class, 'cuenta'])->name('caja.cuenta');
@@ -148,6 +150,10 @@ Route::middleware(['auth'])->group(function () {
 
             Route::post('/caja/turno/cerrar', [CajaTurnoController::class, 'cerrar'])
                 ->name('caja.turno.cerrar');
+
+            // ✅ NUEVA: ticket del cierre de turno
+            Route::get('/caja/turnos/{caja}/ticket', [CajaTurnoController::class, 'ticket'])
+                ->name('caja.turno.ticket');
 
             /*
             |--------------------------------------------------------------------------

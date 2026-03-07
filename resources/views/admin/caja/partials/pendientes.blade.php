@@ -1,3 +1,5 @@
+{{-- resources/views/admin/caja/partials/pendientes.blade.php --}}
+
 @php
   $count = $comandasPendientes->count();
 @endphp
@@ -34,8 +36,10 @@
                 <div class="text-xs text-gray-500 mt-1">estimado</div>
 
                 <div class="mt-3 flex flex-col sm:flex-row gap-2 justify-end">
-                    <a href="{{ route('admin.caja.cuenta', $c) }}" target="_blank"
-                       class="px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-semibold hover:opacity-90">
+                    <a href="{{ route('admin.caja.cuenta', $c) }}"
+                       class="js-print-preticket px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-semibold hover:opacity-90"
+                       data-print-url="{{ route('admin.caja.cuenta', $c) }}"
+                       data-comanda-id="{{ (int)$c->id }}">
                         🖨️ Imprimir cuenta
                     </a>
 

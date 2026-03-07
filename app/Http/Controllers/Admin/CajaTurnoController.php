@@ -8,7 +8,9 @@ use App\Models\Caja;
 use App\Models\CajaMovimiento;
 use App\Models\Comanda;
 use App\Models\Mesa;
+use App\Models\Pago;
 use App\Models\User;
+use App\Models\Venta;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -79,7 +81,7 @@ class CajaTurnoController extends Controller
             $caja = Caja::create([
                 'id_local'          => $localId,
                 'turno'             => $turnoSiguiente,
-                'fecha'             => now()->toDateString(),
+                'fecha'             => now('America/Argentina/Buenos_Aires')->toDateString(),
                 'estado'            => 'abierta',
 
                 'efectivo_apertura' => $efectivoApertura,
@@ -87,7 +89,7 @@ class CajaTurnoController extends Controller
                 'salida_efectivo'   => 0,
                 'efectivo_turno'    => (float)$efectivoApertura,
 
-                'abierta_at'        => now(),
+                'abierta_at'        => now('America/Argentina/Buenos_Aires'),
                 'cerrada_at'        => null,
                 'abierta_por'       => $userId,
                 'cerrada_por'       => null,
@@ -95,7 +97,6 @@ class CajaTurnoController extends Controller
                 'observacion'       => $data['observacion'] ?? null,
             ]);
 
-            // ✅ Registrar ajustes como movimientos para mantener consistencia
             if ($ingresoInicial > 0) {
                 CajaMovimiento::create([
                     'id_local'  => $localId,
@@ -104,9 +105,10 @@ class CajaTurnoController extends Controller
                     'tipo'      => 'ingreso',
                     'monto'     => $ingresoInicial,
                     'concepto'  => 'Ajuste de apertura (ingreso)',
-                    'movido_at' => now(),
+                    'movido_at' => now('America/Argentina/Buenos_Aires'),
                 ]);
             }
+
             if ($salidaInicial > 0) {
                 CajaMovimiento::create([
                     'id_local'  => $localId,
@@ -115,11 +117,10 @@ class CajaTurnoController extends Controller
                     'tipo'      => 'salida',
                     'monto'     => $salidaInicial,
                     'concepto'  => 'Ajuste de apertura (salida)',
-                    'movido_at' => now(),
+                    'movido_at' => now('America/Argentina/Buenos_Aires'),
                 ]);
             }
 
-            // ✅ recalcular totales reales del turno
             $caja->refreshTotalesCache();
 
             return redirect()
@@ -147,7 +148,6 @@ class CajaTurnoController extends Controller
                 return back()->with('error', 'No hay un turno de caja abierto para cerrar.');
             }
 
-            // ✅ No permitir cerrar si hay comandas activas
             $hayComandasActivas = Comanda::query()
                 ->where('id_local', $localId)
                 ->whereIn('estado', ['abierta', 'en_cocina', 'lista', 'entregada', 'cerrando'])
@@ -165,7 +165,6 @@ class CajaTurnoController extends Controller
                 return back()->with('error', 'Usá solo ingreso o salida de ajuste, no ambos.');
             }
 
-            // ✅ Ajustes finales como movimientos
             if ($ajIng > 0) {
                 CajaMovimiento::create([
                     'id_local'  => $localId,
@@ -174,9 +173,10 @@ class CajaTurnoController extends Controller
                     'tipo'      => 'ingreso',
                     'monto'     => $ajIng,
                     'concepto'  => 'Ajuste de cierre (ingreso)',
-                    'movido_at' => now(),
+                    'movido_at' => now('America/Argentina/Buenos_Aires'),
                 ]);
             }
+
             if ($ajSal > 0) {
                 CajaMovimiento::create([
                     'id_local'  => $localId,
@@ -185,17 +185,15 @@ class CajaTurnoController extends Controller
                     'tipo'      => 'salida',
                     'monto'     => $ajSal,
                     'concepto'  => 'Ajuste de cierre (salida)',
-                    'movido_at' => now(),
+                    'movido_at' => now('America/Argentina/Buenos_Aires'),
                 ]);
             }
 
-            // ✅ recalcula totales reales (incluye ventas efectivo neto y vuelto)
             $caja->refreshTotalesCache();
             $caja->refresh();
 
-            // ✅ Cerrar caja
             $caja->estado      = 'cerrada';
-            $caja->cerrada_at  = now();
+            $caja->cerrada_at  = now('America/Argentina/Buenos_Aires');
             $caja->cerrada_por = $userId;
 
             if (!empty($data['observacion'])) {
@@ -207,14 +205,11 @@ class CajaTurnoController extends Controller
 
             $caja->save();
 
-            // ✅ Al cerrar el turno: inactivar TODOS los mozos del local
             User::query()
                 ->where('id_local', $localId)
                 ->where('role', 'mozo')
                 ->update(['estado' => 'inactivo']);
 
-            // ✅ Al cerrar el turno: liberar TODAS las mesas del local
-            // (mismo criterio que en CajaController@cobrar)
             Mesa::query()
                 ->where('id_local', $localId)
                 ->update([
@@ -224,13 +219,90 @@ class CajaTurnoController extends Controller
                     'atendida_at'  => null,
                 ]);
 
+            $printUrl = route('admin.caja.turno.ticket', $caja);
+
             return redirect()
                 ->route('admin.caja.index')
                 ->with(
                     'ok',
                     'Turno de caja cerrado (#' . $caja->turno . '). Mozos inactivados y mesas liberadas. Efectivo final: ' .
                     number_format((float)$caja->efectivo_turno, 2, ',', '.')
-                );
+                )
+                ->with('rf_print_turno_url', $printUrl)
+                ->with('rf_turno_id', (int)$caja->id);
         });
+    }
+
+    public function ticket(Caja $caja)
+    {
+        $localId = $this->localId();
+        abort_unless((int)$caja->id_local === $localId, 403);
+
+        $movimientos = CajaMovimiento::query()
+            ->where('id_caja', $caja->id)
+            ->orderBy('movido_at')
+            ->orderBy('id')
+            ->get();
+
+        $ventas = Venta::query()
+            ->where('id_caja', $caja->id)
+            ->orderBy('sold_at')
+            ->orderBy('id')
+            ->get();
+
+        $ventaIds = $ventas->pluck('id')->all();
+
+        $pagos = empty($ventaIds)
+            ? collect()
+            : Pago::query()
+                ->whereIn('id_venta', $ventaIds)
+                ->orderBy('id')
+                ->get();
+
+        $pagosPorVenta = $pagos->groupBy('id_venta');
+
+        $ventasTotal       = (float) $ventas->sum('total');
+        $ventasPagadoTotal = (float) $ventas->sum('pagado_total');
+        $ventasVuelto      = (float) $ventas->sum('vuelto');
+
+        $efectivoBruto = (float) $pagos->where('tipo', 'efectivo')->sum('monto');
+        $debitoTotal   = (float) $pagos->where('tipo', 'debito')->sum('monto');
+        $transferTotal = (float) $pagos->where('tipo', 'transferencia')->sum('monto');
+
+        $efectivoVentasNeto = (float) ($efectivoBruto - $ventasVuelto);
+
+        // ✅ Propinas desde ventas, no desde movimientos
+        $propinas = (float) $ventas->sum('propina');
+
+        // ✅ Ingresos manuales/otros desde movimientos
+        $otrosIngresos = (float) $movimientos
+            ->where('tipo', 'ingreso')
+            ->sum('monto');
+
+        $otrasSalidas = (float) $movimientos
+            ->where('tipo', 'salida')
+            ->sum('monto');
+
+        $usuarioApertura = $caja->abierta_por ? User::find($caja->abierta_por) : null;
+        $usuarioCierre   = $caja->cerrada_por ? User::find($caja->cerrada_por) : null;
+
+        return view('admin.caja.turno-ticket', compact(
+            'caja',
+            'movimientos',
+            'ventas',
+            'pagosPorVenta',
+            'ventasTotal',
+            'ventasPagadoTotal',
+            'ventasVuelto',
+            'efectivoBruto',
+            'efectivoVentasNeto',
+            'debitoTotal',
+            'transferTotal',
+            'propinas',
+            'otrosIngresos',
+            'otrasSalidas',
+            'usuarioApertura',
+            'usuarioCierre'
+        ));
     }
 }

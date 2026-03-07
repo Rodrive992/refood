@@ -33,17 +33,19 @@ class CajaController extends Controller
             ->first();
     }
 
-    public function index(Request $request)
+    private function propinasTurno(?Caja $caja): float
     {
-        $localId = $this->localId();
-        $cajaAbierta = $this->cajaAbierta($localId);
-
-        // ✅ refrescar cache para que siempre muestre números reales
-        if ($cajaAbierta) {
-            $cajaAbierta->refreshTotalesCache();
-            $cajaAbierta->refresh();
+        if (!$caja) {
+            return 0.0;
         }
 
+        return (float) Venta::query()
+            ->where('id_caja', $caja->id)
+            ->sum('propina');
+    }
+
+    private function getMesasConPendientes(int $localId): array
+    {
         $mesas = Mesa::query()
             ->where('id_local', $localId)
             ->whereNotIn('estado', ['fuera_servicio', 'inactiva'])
@@ -62,11 +64,29 @@ class CajaController extends Controller
 
         $pendientesPorMesa = $comandasPendientes->keyBy('id_mesa');
 
+        return [$mesas, $comandasPendientes, $pendientesPorMesa];
+    }
+
+    public function index(Request $request)
+    {
+        $localId = $this->localId();
+        $cajaAbierta = $this->cajaAbierta($localId);
+
+        if ($cajaAbierta) {
+            $cajaAbierta->refreshTotalesCache();
+            $cajaAbierta->refresh();
+        }
+
+        $propinasTurno = $this->propinasTurno($cajaAbierta);
+
+        [$mesas, $comandasPendientes, $pendientesPorMesa] = $this->getMesasConPendientes($localId);
+
         return view('admin.caja.index', compact(
             'mesas',
             'comandasPendientes',
             'pendientesPorMesa',
-            'cajaAbierta'
+            'cajaAbierta',
+            'propinasTurno'
         ));
     }
 
@@ -114,7 +134,6 @@ class CajaController extends Controller
 
         $cajaAbierta = $this->cajaAbierta($localId);
 
-        // ✅ refrescar cache para ver montos reales también en show
         if ($cajaAbierta) {
             $cajaAbierta->refreshTotalesCache();
             $cajaAbierta->refresh();
@@ -243,11 +262,6 @@ class CajaController extends Controller
         return back()->with('ok', 'Item eliminado por Caja.');
     }
 
-    /**
-     * Cobrar: exige caja abierta y setea ventas.id_caja
-     * ✅ Corrige: efectivo_turno debe sumar efectivo cobrado y restar vuelto.
-     * ✅ Valida: el vuelto debe estar cubierto por el pago en efectivo.
-     */
     public function cobrar(Request $request, Comanda $comanda)
     {
         $localId = $this->localId();
@@ -268,6 +282,7 @@ class CajaController extends Controller
         $data = $request->validate([
             'descuento' => ['nullable', 'numeric', 'min:0'],
             'recargo'   => ['nullable', 'numeric', 'min:0'],
+            'propina'   => ['nullable', 'numeric', 'min:0'],
             'nota'      => ['nullable', 'string', 'max:255'],
 
             'pagos' => ['required', 'array', 'min:1'],
@@ -308,6 +323,7 @@ class CajaController extends Controller
 
             $descuento = (float) ($data['descuento'] ?? 0);
             $recargo   = (float) ($data['recargo'] ?? 0);
+            $propina   = (float) ($data['propina'] ?? 0);
 
             $total = max(0, $subtotal - $descuento + $recargo);
 
@@ -331,7 +347,6 @@ class CajaController extends Controller
 
             $vuelto = max(0, $pagadoTotal - $total);
 
-            // ✅ Validación clave: vuelto debe estar cubierto por efectivo
             if ($vuelto > $efectivoRecibido + 0.00001) {
                 return back()
                     ->withErrors(['pagos' => 'El vuelto se entrega en efectivo. El pago en efectivo debe ser mayor o igual al vuelto.'])
@@ -355,11 +370,12 @@ class CajaController extends Controller
                 'subtotal'     => $subtotal,
                 'descuento'    => $descuento,
                 'recargo'      => $recargo,
+                'propina'      => $propina,
                 'total'        => $total,
                 'pagado_total' => $pagadoTotal,
                 'vuelto'       => $vuelto,
                 'nota'         => $data['nota'] ?? null,
-                'sold_at'      => now(),
+                'sold_at'      => now('America/Argentina/Buenos_Aires'),
             ]);
 
             foreach ($pagos as $p) {
@@ -368,13 +384,13 @@ class CajaController extends Controller
                     'tipo'        => $p['tipo'],
                     'monto'       => (float) $p['monto'],
                     'referencia'  => $p['referencia'] ?? null,
-                    'recibido_at' => now(),
+                    'recibido_at' => now('America/Argentina/Buenos_Aires'),
                 ]);
             }
 
             $comanda->update([
                 'estado'      => 'cerrada',
-                'closed_at'   => now(),
+                'closed_at'   => now('America/Argentina/Buenos_Aires'),
                 'estado_caja' => 'cobrada',
             ]);
 
@@ -390,15 +406,15 @@ class CajaController extends Controller
                     ]);
             }
 
-            // ✅ refrescamos cache de caja (ya resta vuelto)
             $caja->refreshTotalesCache();
 
+            $printUrl = route('admin.ventas.ticket', $venta);
+
             return redirect()
-                ->route('admin.ventas.ticket', [
-                    'venta' => $venta->id,
-                    'back'  => route('admin.caja.index'),
-                ])
-                ->with('ok', 'Venta registrada. Ticket listo para imprimir.');
+                ->route('admin.caja.index')
+                ->with('ok', 'Venta registrada. Enviando ticket a impresión...')
+                ->with('rf_print_final_url', $printUrl)
+                ->with('rf_venta_id', (int)$venta->id);
         });
     }
 
@@ -418,9 +434,6 @@ class CajaController extends Controller
         return view('admin.caja.partials.pendientes', compact('comandasPendientes'));
     }
 
-    /**
-     * ✅ Opcional: poll JSON (count + html) para index.
-     */
     public function pendientesPoll(Request $request)
     {
         $localId = $this->localId();
@@ -439,6 +452,22 @@ class CajaController extends Controller
         return response()->json([
             'ok' => true,
             'count' => (int)$comandasPendientes->count(),
+            'html' => $html,
+            'ts' => now()->toISOString(),
+        ]);
+    }
+
+    public function mesasPoll(Request $request)
+    {
+        $localId = $this->localId();
+
+        [$mesas, $comandasPendientes, $pendientesPorMesa] = $this->getMesasConPendientes($localId);
+
+        $html = view('admin.caja.partials.mesas', compact('mesas', 'pendientesPorMesa'))->render();
+
+        return response()->json([
+            'ok' => true,
+            'count' => (int)$mesas->count(),
             'html' => $html,
             'ts' => now()->toISOString(),
         ]);

@@ -98,7 +98,6 @@
                 Ver cuenta (pre-ticket)
             </a>
 
-            {{-- + Agregar items (bloqueado si no hay caja) --}}
             <button type="button"
                     class="rounded-xl px-4 py-2 font-semibold text-white {{ !$hayCaja ? 'opacity-50 cursor-not-allowed' : '' }}"
                     style="background: var(--rf-primary);"
@@ -110,12 +109,9 @@
         </div>
     </div>
 
-    {{-- Layout: Detalle ancho + Cobro --}}
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
 
-        {{-- ======================
-            COLUMNA DETALLE (ANCHA)
-        ====================== --}}
+        {{-- DETALLE --}}
         <section class="lg:col-span-7 rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
             <div class="px-4 py-4 border-b border-slate-200">
                 <div class="flex items-center justify-between gap-3">
@@ -173,7 +169,6 @@
                                         </div>
                                     </div>
 
-                                    {{-- Eliminar item (bloqueado si no hay caja) --}}
                                     <div class="w-20 text-right">
                                         <form method="POST"
                                               action="{{ route('admin.caja.items.delete', $it) }}"
@@ -206,16 +201,13 @@
             </div>
         </section>
 
-        {{-- ======================
-            COLUMNA COBRO
-        ====================== --}}
+        {{-- COBRO --}}
         <section class="lg:col-span-5 rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
             <div class="px-4 py-4 border-b border-slate-200">
                 <h2 class="text-lg font-extrabold text-slate-900">Cobro</h2>
                 <p class="text-sm text-slate-600 mt-1">Pagos dinámicos (efectivo / débito / transferencia)</p>
             </div>
 
-            {{-- ✅ aviso si no hay caja --}}
             @if(!$hayCaja)
                 <div class="p-4">
                     <div class="rounded-2xl border border-amber-200 bg-amber-50 text-amber-900 px-4 py-3">
@@ -234,7 +226,7 @@
                 @csrf
 
                 {{-- Ajustes --}}
-                <div class="grid grid-cols-2 gap-2">
+                <div class="grid grid-cols-3 gap-2">
                     <div>
                         <label class="block text-sm font-semibold text-slate-700">Descuento</label>
                         <input type="number" step="0.01" min="0" name="descuento"
@@ -252,6 +244,15 @@
                                value="{{ old('recargo', '0') }}"
                                oninput="recalcTotales()">
                     </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700">Propina</label>
+                        <input type="number" step="0.01" min="0" name="propina"
+                               class="mt-1 w-full rounded-xl border-slate-200"
+                               placeholder="0,00"
+                               value="{{ old('propina', '0') }}"
+                               oninput="recalcTotales()">
+                    </div>
                 </div>
 
                 {{-- Totales --}}
@@ -260,17 +261,24 @@
                         <div class="text-sm text-slate-600">Total a cobrar</div>
                         <div class="text-xl font-extrabold text-slate-900" id="totalCobrarText"></div>
                     </div>
+
+                    <div class="mt-1 flex items-center justify-between">
+                        <div class="text-sm text-slate-600">Propina</div>
+                        <div class="text-base font-bold text-slate-900" id="propinaText"></div>
+                    </div>
+
                     <div class="mt-2 flex items-center justify-between">
                         <div class="text-sm text-slate-600">Pagado</div>
                         <div class="text-base font-bold text-slate-900" id="pagadoText"></div>
                     </div>
+
                     <div class="mt-1 flex items-center justify-between">
                         <div class="text-sm text-slate-600">Vuelto</div>
                         <div class="text-base font-bold text-slate-900" id="vueltoText"></div>
                     </div>
 
                     <div class="mt-2 text-xs text-slate-500">
-                        Si el pagado es menor al total, el sistema no permite confirmar.
+                        La propina se registra aparte. No modifica el total del ticket ni el vuelto.
                     </div>
                 </div>
 
@@ -282,10 +290,9 @@
                             <div class="text-xs text-slate-500">Agregá uno o varios pagos (mixto)</div>
                         </div>
 
-                        <button type="button"
+                        <button id="btnAddPago" type="button"
                                 class="rounded-xl px-3 py-2 font-semibold text-white"
-                                style="background: var(--rf-primary);"
-                                onclick="addPagoRow()">
+                                style="background: var(--rf-primary);">
                             + Agregar pago
                         </button>
                     </div>
@@ -315,9 +322,7 @@
     </div>
 </div>
 
-{{-- =========================================================
-   MODAL: Agregar items (ADMIN CAJA)
-========================================================= --}}
+{{-- MODAL: Agregar items --}}
 <div id="modalAddItemsAdmin"
      class="hidden fixed inset-0 z-50 rf-modal-backdrop"
      style="background: rgba(0,0,0,0.45);">
@@ -440,9 +445,7 @@
 </div>
 
 <script>
-    // ==========================
-    // Helpers
-    // ==========================
+(function(){
     const subtotalBase = Number(@json((float)$subtotal));
     const hayCaja = Boolean(@json($hayCaja));
 
@@ -455,9 +458,6 @@
         return '$ ' + (Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
     }
 
-    // ==========================
-    // Pagos dinámicos
-    // ==========================
     let pagoIndex = 0;
 
     function pagoRowHtml(idx, tipo = 'efectivo', monto = '', ref = '') {
@@ -497,35 +497,22 @@
                     <button type="button"
                             class="w-full rounded-xl px-3 py-2 font-extrabold border border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
                             title="Quitar"
-                            onclick="removePagoRow(${idx})">✕</button>
+                            data-remove-pago="${idx}">✕</button>
                 </div>
             </div>
         </div>
         `;
     }
 
-    function addPagoRow(tipo, monto, ref) {
-        const wrap = document.getElementById('pagosWrap');
-        wrap.insertAdjacentHTML('beforeend', pagoRowHtml(pagoIndex, tipo, monto, ref));
-        pagoIndex++;
-        recalcTotales();
-    }
-
-    function removePagoRow(idx) {
-        const row = document.querySelector(`.pago-row[data-idx="${idx}"]`);
-        if (row) row.remove();
-        recalcTotales();
-    }
-
-    // ==========================
-    // Totales
-    // ==========================
-    function recalcTotales() {
+    window.recalcTotales = function recalcTotales() {
         const descuento = toNumber(document.querySelector('input[name="descuento"]')?.value);
         const recargo   = toNumber(document.querySelector('input[name="recargo"]')?.value);
+        const propina   = toNumber(document.querySelector('input[name="propina"]')?.value);
 
+        // ✅ la propina NO integra el total de la cuenta
         const total = Math.max(0, subtotalBase - descuento + recargo);
         window.__totalCobrar = total;
+        window.__propina = propina;
 
         let pagado = 0;
         document.querySelectorAll('.pago-monto').forEach(inp => {
@@ -534,14 +521,42 @@
 
         const vuelto = Math.max(0, pagado - total);
 
-        document.getElementById('totalCobrarText').textContent = moneyAr(total);
-        document.getElementById('pagadoText').textContent      = moneyAr(pagado);
-        document.getElementById('vueltoText').textContent      = moneyAr(vuelto);
-    }
+        const t1 = document.getElementById('totalCobrarText');
+        const tProp = document.getElementById('propinaText');
+        const t2 = document.getElementById('pagadoText');
+        const t3 = document.getElementById('vueltoText');
 
-    // ==========================
-    // Validación antes de enviar
-    // ==========================
+        if (t1) t1.textContent = moneyAr(total);
+        if (tProp) tProp.textContent = moneyAr(propina);
+        if (t2) t2.textContent = moneyAr(pagado);
+        if (t3) t3.textContent = moneyAr(vuelto);
+    };
+
+    window.addPagoRow = function addPagoRow(tipo, monto, ref) {
+        const wrap = document.getElementById('pagosWrap');
+        if (!wrap) return;
+        wrap.insertAdjacentHTML('beforeend', pagoRowHtml(pagoIndex, tipo || 'efectivo', monto || '', ref || ''));
+        pagoIndex++;
+        window.recalcTotales();
+    };
+
+    window.removePagoRow = function removePagoRow(idx) {
+        const row = document.querySelector(`.pago-row[data-idx="${idx}"]`);
+        if (row) row.remove();
+        window.recalcTotales();
+    };
+
+    document.getElementById('btnAddPago')?.addEventListener('click', function(){
+        window.addPagoRow('efectivo', '', '');
+    });
+
+    document.addEventListener('click', function(e){
+        const btn = e.target.closest('[data-remove-pago]');
+        if(!btn) return;
+        const idx = parseInt(btn.getAttribute('data-remove-pago') || '0', 10);
+        window.removePagoRow(idx);
+    });
+
     document.getElementById('cobroForm')?.addEventListener('submit', function (e) {
         if (!hayCaja) {
             e.preventDefault();
@@ -549,7 +564,7 @@
             return;
         }
 
-        recalcTotales();
+        window.recalcTotales();
 
         const total = Number(window.__totalCobrar ?? 0);
 
@@ -574,9 +589,6 @@
         }
     });
 
-    // ==========================
-    // MODAL util (open/close)
-    // ==========================
     function openModal(id){
         if (!hayCaja) {
             alert('No hay turno abierto. Abrí caja para poder modificar/cobrar.');
@@ -587,6 +599,7 @@
         el.classList.remove('hidden');
         el.classList.add('flex');
     }
+
     function closeModal(id){
         const el = document.getElementById(id);
         if (!el) return;
@@ -607,9 +620,6 @@
         }
     });
 
-    // ==========================
-    // MODAL Add items (Admin)
-    // ==========================
     (function(){
         function qs(id){ return document.getElementById(id); }
 
@@ -640,6 +650,7 @@
                 .replaceAll('"','&quot;')
                 .replaceAll("'","&#039;");
         }
+
         function escapeAttr(s){
             return String(s || '').replaceAll('"','&quot;');
         }
@@ -712,7 +723,6 @@
             if (!lines.children.length) renderEmpty();
         });
 
-        // reset cuando se abre
         document.addEventListener('click', function(e){
             const open = e.target.closest('[data-action="open-modal"][data-modal="modalAddItemsAdmin"]');
             if (!open) return;
@@ -744,12 +754,10 @@
 
     })();
 
-    // ==========================
-    // Init
-    // ==========================
     document.addEventListener('DOMContentLoaded', () => {
-        addPagoRow('efectivo', '', '');
-        recalcTotales();
+        window.addPagoRow('efectivo', '', '');
+        window.recalcTotales();
     });
+})();
 </script>
 @endsection

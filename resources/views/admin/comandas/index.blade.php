@@ -1,3 +1,5 @@
+{{-- resources/views/admin/comandas/index.blade.php --}}
+
 @extends('layouts.app')
 
 @section('content')
@@ -77,6 +79,24 @@
 
     <div class="mt-6" id="paginationWrap">
         {{ $comandas->links() }}
+    </div>
+</div>
+
+{{-- ✅ TOAST flotante --}}
+<div id="rfToast"
+     class="fixed bottom-5 right-5 z-50 pointer-events-none opacity-0 translate-y-2 transition duration-200 ease-out">
+    <div class="pointer-events-auto rounded-2xl border border-emerald-200 bg-white shadow-lg px-4 py-3 flex items-start gap-3">
+        <div class="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+            ✅
+        </div>
+        <div class="min-w-0">
+            <div class="font-extrabold text-slate-900" id="rfToastTitle">Listo</div>
+            <div class="text-sm text-slate-600" id="rfToastMsg">Comanda impresa.</div>
+        </div>
+        <button type="button" id="rfToastClose"
+                class="ml-2 text-slate-400 hover:text-slate-700 font-bold">
+            ✕
+        </button>
     </div>
 </div>
 
@@ -223,19 +243,10 @@
     rfSoundBtn.addEventListener('click', function(){
         soundEnabled = !soundEnabled;
         setSoundLabel();
-
-        // "desbloquear" audio con una interacción, por si el navegador lo exige:
         if(soundEnabled) beep();
     });
 
-    // Si cambian filtros, reseteamos el contador total y forzamos poll
-    filterForm.addEventListener('submit', function(){
-        // deja que navegue normal al index con querystring
-        // (pero el auto-refresco ya arranca sobre ese estado)
-    });
-
     // Paginación: capturamos click para no recargar página (opcional)
-    // Si preferís recargar normal, podés borrar todo este bloque.
     document.addEventListener('click', function(e){
         const a = e.target.closest('#paginationWrap a');
         if(!a) return;
@@ -257,9 +268,102 @@
     setStatus();
     setSoundLabel();
     start();
-
-    // primer poll apenas carga
     poll();
+})();
+</script>
+
+{{-- ✅ PRINT DIRECTO (iframe) + TOAST (sin alert) --}}
+<script>
+(function(){
+    // Toast helpers
+    const toast = document.getElementById('rfToast');
+    const toastTitle = document.getElementById('rfToastTitle');
+    const toastMsg = document.getElementById('rfToastMsg');
+    const toastClose = document.getElementById('rfToastClose');
+
+    let toastTimer = null;
+
+    function showToast(title, msg) {
+        toastTitle.textContent = title || 'Listo';
+        toastMsg.textContent = msg || '';
+
+        toast.classList.remove('opacity-0', 'translate-y-2');
+        toast.classList.add('opacity-100', 'translate-y-0');
+
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(hideToast, 2400);
+    }
+
+    function hideToast(){
+        toast.classList.add('opacity-0', 'translate-y-2');
+        toast.classList.remove('opacity-100', 'translate-y-0');
+    }
+
+    toastClose.addEventListener('click', function(){
+        hideToast();
+    });
+
+    // Iframe oculto para imprimir
+    let printFrame = document.getElementById('rfPrintFrame');
+    if (!printFrame) {
+        printFrame = document.createElement('iframe');
+        printFrame.id = 'rfPrintFrame';
+        printFrame.style.position = 'fixed';
+        printFrame.style.right = '0';
+        printFrame.style.bottom = '0';
+        printFrame.style.width = '0';
+        printFrame.style.height = '0';
+        printFrame.style.border = '0';
+        printFrame.style.opacity = '0';
+        document.body.appendChild(printFrame);
+    }
+
+    // Evitar duplicados
+    let lastPrintedId = null;
+    let lastPrintedAt = 0;
+
+    function printedOnce(comandaId){
+        const now = Date.now();
+        if (lastPrintedId === comandaId && (now - lastPrintedAt) < 1200) return false;
+        lastPrintedId = comandaId;
+        lastPrintedAt = now;
+        return true;
+    }
+
+    function notifyPrinted(comandaId){
+        if(!printedOnce(comandaId)) return;
+        showToast('Comanda impresa', 'Comanda #' + comandaId + ' enviada a impresión.');
+    }
+
+    // Mensaje desde el print.blade.php (iframe)
+    window.addEventListener('message', function(ev){
+        const data = ev.data || {};
+        if (data.type === 'RF_PRINT_DONE' && data.comanda_id) {
+            notifyPrinted(parseInt(data.comanda_id, 10));
+        }
+    });
+
+    // Click en "Imprimir comanda" sin navegar
+    document.addEventListener('click', function(e){
+        const btn = e.target.closest('.js-print-comanda');
+        if(!btn) return;
+
+        e.preventDefault();
+
+        const url = btn.dataset.printUrl || btn.getAttribute('href');
+        const comandaId = parseInt(btn.dataset.comandaId || '0', 10);
+        if(!url) return;
+
+        // Cargar print dentro de iframe
+        printFrame.src = url;
+
+        // Fallback: si no llega mensaje, mostramos toast igual
+        if (comandaId) {
+            setTimeout(function(){
+                notifyPrinted(comandaId);
+            }, 1100);
+        }
+    });
 })();
 </script>
 @endsection

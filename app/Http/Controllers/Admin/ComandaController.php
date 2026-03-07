@@ -32,9 +32,9 @@ class ComandaController extends Controller
             ->orderByDesc('opened_at');
 
         if ($estado === 'activas') {
-            $query->whereIn('estado', ['abierta','en_cocina','lista','entregada','cerrando']);
+            $query->whereIn('estado', ['abierta', 'en_cocina', 'lista', 'entregada', 'cerrando']);
         } elseif ($estado === 'cerradas') {
-            $query->whereIn('estado', ['cerrada','anulada']);
+            $query->whereIn('estado', ['cerrada', 'anulada']);
         }
 
         if (!empty($mesaId)) {
@@ -56,7 +56,7 @@ class ComandaController extends Controller
             ->where('id_local', $localId)
             ->where('estado', '!=', 'inactiva')
             ->orderBy('nombre')
-            ->get(['id','nombre','estado']);
+            ->get(['id', 'nombre', 'estado']);
 
         return view('admin.comandas.index', compact('comandas', 'mesas', 'estado', 'mesaId', 'q'));
     }
@@ -110,9 +110,9 @@ class ComandaController extends Controller
             ->orderByDesc('opened_at');
 
         if ($estado === 'activas') {
-            $query->whereIn('estado', ['abierta','en_cocina','lista','entregada','cerrando']);
+            $query->whereIn('estado', ['abierta', 'en_cocina', 'lista', 'entregada', 'cerrando']);
         } elseif ($estado === 'cerradas') {
-            $query->whereIn('estado', ['cerrada','anulada']);
+            $query->whereIn('estado', ['cerrada', 'anulada']);
         }
 
         if (!empty($mesaId)) {
@@ -155,9 +155,11 @@ class ComandaController extends Controller
         $localId = $this->localId();
         abort_unless((int)$comanda->id_local === $localId, 403);
 
-        // Cargar relaciones y items
         $comanda->load(['mesa', 'mozo', 'items']);
 
-        return view('admin.comandas.print', compact('comanda'));
+        // Hora local (Argentina). Ideal: que app.timezone ya sea America/Argentina/Buenos_Aires
+        $printedAt = now()->setTimezone('America/Argentina/Buenos_Aires');
+
+        return view('admin.comandas.print', compact('comanda', 'printedAt'));
     }
 }
