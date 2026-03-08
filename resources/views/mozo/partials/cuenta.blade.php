@@ -1,11 +1,5 @@
 {{-- resources/views/mozo/partials/cuenta.blade.php --}}
 @php
-    // Entrada esperada:
-    // $isMobile (bool)
-    // $mesaSelected (?Mesa)
-    // $comanda (?Comanda)  (puede venir null)
-    // $subtotal (float)
-
     $mesa = $mesaSelected ?? null;
     $hasMesa = $mesa && (int)$mesa->id > 0;
 
@@ -15,14 +9,21 @@
     $estadoMesa = $hasMesa ? (string)($mesa->estado ?? '') : '';
     $mesaLibre = $estadoMesa === 'libre';
 
-    // Mantengo tu formato (sin $ y sin decimales)
-    $subtotalFmt = number_format((float)($subtotal ?? 0), 0, '.', '.');
+    $mozoId = $mozoId ?? auth()->id();
+    $mesaTomadaPorOtro = $hasMesa
+        && $estadoMesa !== 'libre'
+        && !empty($mesa->atendida_por)
+        && (int)$mesa->atendida_por !== (int)$mozoId;
+
+    $nombreMozo = $mesa?->mozoAtendiendo?->name;
+
+    $subtotalNumero = (float)($subtotal ?? 0);
+    $subtotalFmt = number_format($subtotalNumero, 0, '.', '.');
 @endphp
 
 <div class="bg-white rounded-2xl border shadow-sm overflow-hidden"
      style="border-color: var(--rf-border);">
 
-    {{-- Header --}}
     <div class="p-4 border-b flex items-start justify-between gap-3"
          style="border-color: var(--rf-border);">
         <div>
@@ -36,6 +37,7 @@
                     Seleccioná una mesa
                 @endif
             </div>
+
             @if($hasMesa)
                 <div class="text-xs mt-1" style="color: var(--rf-text-light);">
                     Estado mesa:
@@ -44,10 +46,16 @@
                         • Comanda #{{ $comanda->id }}
                     @endif
                 </div>
+
+                @if($nombreMozo && !$mesaLibre)
+                    <div class="text-xs mt-2 font-semibold"
+                         style="color: {{ $mesaTomadaPorOtro ? '#dc2626' : '#15803d' }};">
+                        {{ $mesaTomadaPorOtro ? 'Atiende:' : 'Mozo asignado:' }} {{ $nombreMozo }}
+                    </div>
+                @endif
             @endif
         </div>
 
-        {{-- Badge estado cuenta --}}
         @if($hasComanda)
             @if($cuentaPedida)
                 <div class="px-3 py-1.5 rounded-xl text-xs font-bold border"
@@ -63,16 +71,13 @@
         @endif
     </div>
 
-    {{-- Body --}}
     <div class="p-4 space-y-4">
-        {{-- Empty state --}}
         @if(!$hasMesa)
             <div class="rounded-2xl border p-4 text-sm"
                  style="border-color: var(--rf-border); background: var(--rf-bg); color: var(--rf-text-light);">
                 Elegí una mesa para ver el subtotal y solicitar la cuenta.
             </div>
         @else
-            {{-- Subtotal card --}}
             <div class="rounded-2xl border p-4 flex items-center justify-between gap-3"
                  style="border-color: var(--rf-border); background: var(--rf-bg);">
                 <div>
@@ -105,15 +110,24 @@
                 </div>
             </div>
 
-            {{-- Acciones --}}
             <div class="grid gap-2">
-                {{-- Si la mesa está libre, no se puede pedir cuenta --}}
                 @if($mesaLibre)
                     <button type="button" disabled
                             class="w-full px-4 py-3 rounded-2xl text-sm font-extrabold border"
                             style="border-color: var(--rf-border); background: var(--rf-border-light); color: var(--rf-text-light);">
                         Mesa libre (no se puede solicitar cuenta)
                     </button>
+                @elseif($mesaTomadaPorOtro)
+                    <button type="button" disabled
+                            class="w-full px-4 py-3 rounded-2xl text-sm font-extrabold border"
+                            style="border-color: var(--rf-border); background: rgba(239,68,68,0.10); color: #dc2626;">
+                        Bloqueada por otro mozo
+                    </button>
+
+                    <div class="rounded-2xl border p-4 text-sm"
+                         style="border-color: var(--rf-border); background: var(--rf-bg); color: var(--rf-text-light);">
+                        No podés solicitar la cuenta porque esta mesa está siendo atendida por {{ $nombreMozo ?? 'otro mozo' }}.
+                    </div>
                 @else
                     @if(!$hasComanda)
                         <button type="button" disabled
@@ -129,16 +143,13 @@
                                 Cuenta ya solicitada
                             </button>
 
-                            {{-- Info de caja --}}
                             <div class="rounded-2xl border p-4 text-sm"
                                  style="border-color: var(--rf-border); background: var(--rf-bg); color: var(--rf-text-light);">
                                 La cuenta ya fue enviada a caja. Hasta que caja cierre la comanda, no se pueden agregar/editar items.
                             </div>
                         @else
-                            {{-- Botón que abre modal GLOBAL y setea datos actuales --}}
                             <button type="button"
-                                    data-action="open-cuenta-modal"
-                                    data-modal="cuentaModal"
+                                    data-action="open-solicitar-cuenta"
                                     data-comanda-id="{{ $comanda->id }}"
                                     data-mesa-nombre="{{ $mesa->nombre }}"
                                     data-subtotal-fmt="{{ $subtotalFmt }}"

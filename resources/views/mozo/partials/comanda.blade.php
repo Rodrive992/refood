@@ -4,8 +4,15 @@
     $mesa = $mesaSelected ?? null;
     $com = $comanda ?? null;
     $sub = $subtotal ?? 0;
+    $mozoId = $mozoId ?? auth()->id();
 
     $cuentaPedida = $com && (int)($com->cuenta_solicitada ?? 0) === 1;
+    $mesaTomadaPorOtro = $mesa
+        && ($mesa->estado ?? '') !== 'libre'
+        && !empty($mesa->atendida_por)
+        && (int)$mesa->atendida_por !== (int)$mozoId;
+
+    $nombreMozo = $mesa?->mozoAtendiendo?->name;
 @endphp
 
 <div class="bg-white rounded-2xl border rf-scrollbar" style="border-color: var(--rf-border);">
@@ -38,6 +45,13 @@
                         {{ $badgeMesa['label'] }}
                     </span>
 
+                    @if($mesaTomadaPorOtro)
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs"
+                              style="background: rgba(239,68,68,0.12); color: #dc2626;">
+                            Atendida por otro mozo
+                        </span>
+                    @endif
+
                     @if(!empty($mesa->observacion))
                         <span class="text-xs px-2 py-1 rounded-full"
                               style="background: var(--rf-border-light); color: var(--rf-text-light);">
@@ -45,6 +59,13 @@
                         </span>
                     @endif
                 </div>
+
+                @if($nombreMozo && ($mesa->estado ?? '') !== 'libre')
+                    <div class="mt-2 text-xs font-semibold"
+                         style="color: {{ $mesaTomadaPorOtro ? '#dc2626' : '#15803d' }};">
+                        {{ $mesaTomadaPorOtro ? 'Atiende:' : 'Mozo asignado:' }} {{ $nombreMozo }}
+                    </div>
+                @endif
             @endif
         </div>
 
@@ -62,17 +83,29 @@
                         Ocupar
                     </button>
                 @else
-                    <button
-                        type="button"
-                        class="px-4 py-2 rounded-xl text-sm font-semibold rf-hover-lift"
-                        style="background: var(--rf-secondary); color: white;"
-                        data-action="add-items"
-                        data-mesa-id="{{ $mesa->id }}"
-                        data-locked="{{ $cuentaPedida ? '1' : '0' }}"
-                        title="{{ $cuentaPedida ? 'Cuenta solicitada: solo administración puede agregar.' : '' }}"
-                    >
-                        Agregar items
-                    </button>
+                    @if($mesaTomadaPorOtro)
+                        <button
+                            type="button"
+                            disabled
+                            class="px-4 py-2 rounded-xl text-sm font-semibold border"
+                            style="border-color: var(--rf-border); background: var(--rf-border-light); color: var(--rf-text-light);"
+                            title="Esta mesa está siendo atendida por otro mozo"
+                        >
+                            Bloqueada
+                        </button>
+                    @else
+                        <button
+                            type="button"
+                            class="px-4 py-2 rounded-xl text-sm font-semibold rf-hover-lift"
+                            style="background: var(--rf-secondary); color: white;"
+                            data-action="add-items"
+                            data-mesa-id="{{ $mesa->id }}"
+                            data-locked="{{ $cuentaPedida ? '1' : '0' }}"
+                            title="{{ $cuentaPedida ? 'Cuenta solicitada: solo administración puede agregar.' : '' }}"
+                        >
+                            Agregar items
+                        </button>
+                    @endif
                 @endif
             </div>
         @endif
@@ -85,7 +118,6 @@
                 👈 Elegí una mesa para empezar.
             </div>
         @else
-            {{-- Resumen comanda --}}
             <div class="rounded-2xl border p-4"
                  style="border-color: var(--rf-border); background: var(--rf-bg);">
                 <div class="flex items-center justify-between">
@@ -112,9 +144,15 @@
                         Cuenta solicitada. Solo administración puede agregar items y cerrar en caja.
                     </div>
                 @endif
+
+                @if($mesaTomadaPorOtro)
+                    <div class="mt-3 text-xs px-3 py-2 rounded-xl"
+                         style="background: rgba(239,68,68,0.10); color: #dc2626;">
+                        Esta mesa está bloqueada para vos porque la está atendiendo {{ $nombreMozo ?? 'otro mozo' }}.
+                    </div>
+                @endif
             </div>
 
-            {{-- Items --}}
             <div class="mt-4">
                 <h3 class="font-bold text-sm mb-2" style="color: var(--rf-text);">Items</h3>
 
@@ -161,16 +199,13 @@
                                         </div>
                                     </div>
                                 </div>
-
-                                {{-- ❌ mozo NO puede eliminar items (nunca) --}}
                             </div>
                         @endforeach
                     </div>
                 @endif
             </div>
 
-            {{-- Carta rápida (solo mobile) --}}
-            @if($isMobile && ($mesa->estado ?? '') !== 'libre')
+            @if($isMobile && ($mesa->estado ?? '') !== 'libre' && !$mesaTomadaPorOtro)
                 <div class="mt-4 rounded-2xl border p-4"
                      style="border-color: var(--rf-border); background: var(--rf-bg);">
                     <div class="text-sm font-bold" style="color: var(--rf-text);">

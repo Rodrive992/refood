@@ -30,7 +30,6 @@
 
 @section('content')
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
-        {{-- Alerts --}}
         @if(session('ok'))
             <div class="mb-4 rounded-2xl border p-3 text-sm"
                  style="border-color: var(--rf-border); background: var(--rf-secondary-soft); color: var(--rf-secondary-hover);">
@@ -51,7 +50,7 @@
         @endif
 
         {{-- =========================
-            DESKTOP (3 columnas)
+            DESKTOP
         ========================== --}}
         <div class="hidden md:grid md:grid-cols-12 gap-4">
             <div id="mesasPanelDesktop" class="md:col-span-4 space-y-3">
@@ -60,6 +59,7 @@
                     'mesas' => $mesas,
                     'comandasActivasPorMesa' => $comandasActivasPorMesa,
                     'mesaSelected' => $mesaActiva,
+                    'mozoId' => $mozoId ?? auth()->id(),
                 ])
             </div>
 
@@ -69,6 +69,7 @@
                     'mesaSelected' => $mesaActiva,
                     'comanda' => $comandaActiva,
                     'subtotal' => $subtotal,
+                    'mozoId' => $mozoId ?? auth()->id(),
                 ])
             </div>
 
@@ -78,6 +79,7 @@
                     'mesaSelected' => $mesaActiva,
                     'comanda' => $comandaActiva,
                     'subtotal' => $subtotal,
+                    'mozoId' => $mozoId ?? auth()->id(),
                 ])
             </div>
         </div>
@@ -92,6 +94,7 @@
                     'mesas' => $mesas,
                     'comandasActivasPorMesa' => $comandasActivasPorMesa,
                     'mesaSelected' => $mesaActiva,
+                    'mozoId' => $mozoId ?? auth()->id(),
                 ])
             </div>
 
@@ -118,6 +121,7 @@
                         'mesaSelected' => $mesaActiva,
                         'comanda' => $comandaActiva,
                         'subtotal' => $subtotal,
+                        'mozoId' => $mozoId ?? auth()->id(),
                     ])
                 </div>
             </div>
@@ -129,17 +133,17 @@
                         'mesaSelected' => $mesaActiva,
                         'comanda' => $comandaActiva,
                         'subtotal' => $subtotal,
+                        'mozoId' => $mozoId ?? auth()->id(),
                     ])
                 </div>
             </div>
         </div>
     </div>
 
-    {{-- MODALS (los globales) --}}
     @push('modals')
-        @include('mozo.modals.comanda')   {{-- modal ocupar --}}
-        @include('mozo.modals.add-item')  {{-- modal add items --}}
-        {{-- OJO: Solicitar cuenta queda SOLO en partial cuenta (un solo id) --}}
+        @include('mozo.modals.comanda')
+        @include('mozo.modals.add-item')
+        @include('mozo.modals.cuenta')
     @endpush
 
     @push('scripts')
@@ -149,7 +153,9 @@
                 initMobileTabs();
                 initDelegations();
 
-                if (currentMesaId() > 0 && isMobile()) switchTab('comanda');
+                if (currentMesaId() > 0 && isMobile()) {
+                    switchTab('comanda');
+                }
             });
 
             function isMobile() {
@@ -164,12 +170,17 @@
 
             function setMesaIdInUrl(mesaId) {
                 const url = new URL(window.location.href);
-                if (mesaId && mesaId > 0) url.searchParams.set('mesa_id', String(mesaId));
-                else url.searchParams.delete('mesa_id');
+                if (mesaId && mesaId > 0) {
+                    url.searchParams.set('mesa_id', String(mesaId));
+                } else {
+                    url.searchParams.delete('mesa_id');
+                }
                 window.history.pushState({}, '', url.toString());
             }
 
-            function cap(s){ return s.charAt(0).toUpperCase() + s.slice(1); }
+            function cap(s) {
+                return s.charAt(0).toUpperCase() + s.slice(1);
+            }
 
             function lockBodyScroll(lock) {
                 document.body.classList.toggle('modal-open', !!lock);
@@ -191,9 +202,6 @@
                 lockBodyScroll(false);
             }
 
-            /* -------------------------
-               Clock
-            ------------------------- */
             function initClock() {
                 const clockEl = document.getElementById('liveClock');
                 if (!clockEl) return;
@@ -201,21 +209,22 @@
                 function tick() {
                     const now = new Date();
                     clockEl.textContent = now.toLocaleTimeString('es-AR', {
-                        hour: '2-digit', minute: '2-digit', second: '2-digit'
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit'
                     });
                 }
+
                 tick();
                 setInterval(tick, 1000);
             }
 
-            /* -------------------------
-               Tabs
-            ------------------------- */
             function initMobileTabs() {
                 if (!document.getElementById('mobileTabComanda')) return;
 
                 const saved = localStorage.getItem('activeMobileTab');
-                const def = (currentMesaId() > 0) ? 'comanda' : 'comanda';
+                const def = 'comanda';
+
                 switchTab(saved || def);
 
                 document.getElementById('mobileTabComanda')?.addEventListener('click', () => switchTab('comanda'));
@@ -238,20 +247,22 @@
                             tabEl.classList.remove('rf-mobile-tab-active');
                         }
                     }
-                    if (contentEl) contentEl.classList.toggle('hidden', tab !== tabName);
+
+                    if (contentEl) {
+                        contentEl.classList.toggle('hidden', tab !== tabName);
+                    }
                 });
 
                 localStorage.setItem('activeMobileTab', tabName);
             }
 
-            /* -------------------------
-               AJAX (anti mesa anterior)
-            ------------------------- */
             let rfReq = { mesas: null, comanda: null, cuenta: null };
             let rfToken = 0;
 
-            function abortReq(key){
-                try { if (rfReq[key]) rfReq[key].abort(); } catch(_){}
+            function abortReq(key) {
+                try {
+                    if (rfReq[key]) rfReq[key].abort();
+                } catch (_) {}
                 rfReq[key] = null;
             }
 
@@ -267,7 +278,7 @@
                 `;
             }
 
-            function errorBox(msg){
+            function errorBox(msg) {
                 return `
                     <div class="bg-white rounded-2xl border p-4 text-sm"
                          style="border-color: var(--rf-border); color: var(--rf-error);">
@@ -277,17 +288,17 @@
                 `;
             }
 
-            async function refreshMesas(mesaId, token){
+            async function refreshMesas(mesaId, token) {
                 abortReq('mesas');
                 const ctrl = new AbortController();
                 rfReq.mesas = ctrl;
 
                 const desk = document.getElementById('mesasPanelDesktop');
-                const mob  = document.getElementById('mesasPanelMobile');
+                const mob = document.getElementById('mesasPanelMobile');
 
                 const stillValid = () => currentMesaId() === mesaId && rfToken === token;
 
-                try{
+                try {
                     const urlD = new URL(@json(route('mozo.dashboard.mesas')), window.location.origin);
                     urlD.searchParams.set('view', 'desktop');
                     if (mesaId > 0) urlD.searchParams.set('mesa_id', String(mesaId));
@@ -297,59 +308,83 @@
                     if (mesaId > 0) urlM.searchParams.set('mesa_id', String(mesaId));
 
                     const [rD, rM] = await Promise.allSettled([
-                        desk ? fetch(urlD.toString(), {headers:{'X-Requested-With':'XMLHttpRequest'}, signal: ctrl.signal}) : Promise.resolve(null),
-                        mob  ? fetch(urlM.toString(), {headers:{'X-Requested-With':'XMLHttpRequest'}, signal: ctrl.signal}) : Promise.resolve(null),
+                        desk ? fetch(urlD.toString(), {
+                            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                            signal: ctrl.signal
+                        }) : Promise.resolve(null),
+                        mob ? fetch(urlM.toString(), {
+                            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                            signal: ctrl.signal
+                        }) : Promise.resolve(null),
                     ]);
 
                     if (desk && rD.status === 'fulfilled') {
                         const res = rD.value;
-                        if (res && res.ok && stillValid()) desk.innerHTML = await res.text();
+                        if (res && res.ok && stillValid()) {
+                            desk.innerHTML = await res.text();
+                        }
                     }
+
                     if (mob && rM.status === 'fulfilled') {
                         const res = rM.value;
-                        if (res && res.ok && stillValid()) mob.innerHTML = await res.text();
+                        if (res && res.ok && stillValid()) {
+                            mob.innerHTML = await res.text();
+                        }
                     }
-                } catch(_) {} finally {
+                } catch (_) {
+                } finally {
                     if (rfReq.mesas === ctrl) rfReq.mesas = null;
                 }
             }
 
-            async function refreshComanda(mesaId, token){
+            async function refreshComanda(mesaId, token) {
                 abortReq('comanda');
                 const ctrl = new AbortController();
                 rfReq.comanda = ctrl;
 
                 const desk = document.getElementById('comandaPanelDesktop');
-                const mob  = document.getElementById('mobileComandaPanel');
+                const mob = document.getElementById('mobileComandaPanel');
 
                 const stillValid = () => currentMesaId() === mesaId && rfToken === token;
 
-                try{
+                try {
                     const urlD = new URL(@json(route('mozo.dashboard.comanda')), window.location.origin);
-                    urlD.searchParams.set('view','desktop');
+                    urlD.searchParams.set('view', 'desktop');
                     urlD.searchParams.set('mesa_id', String(mesaId));
 
                     const urlM = new URL(@json(route('mozo.dashboard.comanda')), window.location.origin);
-                    urlM.searchParams.set('view','mobile');
+                    urlM.searchParams.set('view', 'mobile');
                     urlM.searchParams.set('mesa_id', String(mesaId));
 
                     const [rD, rM] = await Promise.allSettled([
-                        desk ? fetch(urlD.toString(), {headers:{'X-Requested-With':'XMLHttpRequest'}, signal: ctrl.signal}) : Promise.resolve(null),
-                        mob  ? fetch(urlM.toString(), {headers:{'X-Requested-With':'XMLHttpRequest'}, signal: ctrl.signal}) : Promise.resolve(null),
+                        desk ? fetch(urlD.toString(), {
+                            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                            signal: ctrl.signal
+                        }) : Promise.resolve(null),
+                        mob ? fetch(urlM.toString(), {
+                            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                            signal: ctrl.signal
+                        }) : Promise.resolve(null),
                     ]);
 
                     if (desk && rD.status === 'fulfilled') {
                         const res = rD.value;
-                        if (res && res.ok && stillValid()) desk.innerHTML = await res.text();
-                        else if (stillValid()) desk.innerHTML = errorBox('No se pudo cargar la comanda.');
+                        if (res && res.ok && stillValid()) {
+                            desk.innerHTML = await res.text();
+                        } else if (stillValid()) {
+                            desk.innerHTML = errorBox('No se pudo cargar la comanda.');
+                        }
                     }
 
                     if (mob && rM.status === 'fulfilled') {
                         const res = rM.value;
-                        if (res && res.ok && stillValid()) mob.innerHTML = await res.text();
-                        else if (stillValid()) mob.innerHTML = errorBox('No se pudo cargar la comanda.');
+                        if (res && res.ok && stillValid()) {
+                            mob.innerHTML = await res.text();
+                        } else if (stillValid()) {
+                            mob.innerHTML = errorBox('No se pudo cargar la comanda.');
+                        }
                     }
-                } catch(_) {
+                } catch (_) {
                     if (desk && stillValid()) desk.innerHTML = errorBox('No se pudo cargar la comanda.');
                     if (mob && stillValid()) mob.innerHTML = errorBox('No se pudo cargar la comanda.');
                 } finally {
@@ -357,42 +392,54 @@
                 }
             }
 
-            async function refreshCuenta(mesaId, token){
+            async function refreshCuenta(mesaId, token) {
                 abortReq('cuenta');
                 const ctrl = new AbortController();
                 rfReq.cuenta = ctrl;
 
                 const desk = document.getElementById('cuentaPanelDesktop');
-                const mob  = document.getElementById('mobileCuentaPanel');
+                const mob = document.getElementById('mobileCuentaPanel');
 
                 const stillValid = () => currentMesaId() === mesaId && rfToken === token;
 
-                try{
+                try {
                     const urlD = new URL(@json(route('mozo.dashboard.cuenta')), window.location.origin);
-                    urlD.searchParams.set('view','desktop');
+                    urlD.searchParams.set('view', 'desktop');
                     urlD.searchParams.set('mesa_id', String(mesaId));
 
                     const urlM = new URL(@json(route('mozo.dashboard.cuenta')), window.location.origin);
-                    urlM.searchParams.set('view','mobile');
+                    urlM.searchParams.set('view', 'mobile');
                     urlM.searchParams.set('mesa_id', String(mesaId));
 
                     const [rD, rM] = await Promise.allSettled([
-                        desk ? fetch(urlD.toString(), {headers:{'X-Requested-With':'XMLHttpRequest'}, signal: ctrl.signal}) : Promise.resolve(null),
-                        mob  ? fetch(urlM.toString(), {headers:{'X-Requested-With':'XMLHttpRequest'}, signal: ctrl.signal}) : Promise.resolve(null),
+                        desk ? fetch(urlD.toString(), {
+                            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                            signal: ctrl.signal
+                        }) : Promise.resolve(null),
+                        mob ? fetch(urlM.toString(), {
+                            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                            signal: ctrl.signal
+                        }) : Promise.resolve(null),
                     ]);
 
                     if (desk && rD.status === 'fulfilled') {
                         const res = rD.value;
-                        if (res && res.ok && stillValid()) desk.innerHTML = await res.text();
-                        else if (stillValid()) desk.innerHTML = errorBox('No se pudo cargar la cuenta.');
+                        if (res && res.ok && stillValid()) {
+                            desk.innerHTML = await res.text();
+                        } else if (stillValid()) {
+                            desk.innerHTML = errorBox('No se pudo cargar la cuenta.');
+                        }
                     }
 
                     if (mob && rM.status === 'fulfilled') {
                         const res = rM.value;
-                        if (res && res.ok && stillValid()) mob.innerHTML = await res.text();
-                        else if (stillValid()) mob.innerHTML = errorBox('No se pudo cargar la cuenta.');
+                        if (res && res.ok && stillValid()) {
+                            mob.innerHTML = await res.text();
+                        } else if (stillValid()) {
+                            mob.innerHTML = errorBox('No se pudo cargar la cuenta.');
+                        }
                     }
-                } catch(_) {
+                } catch (_) {
                     if (desk && stillValid()) desk.innerHTML = errorBox('No se pudo cargar la cuenta.');
                     if (mob && stillValid()) mob.innerHTML = errorBox('No se pudo cargar la cuenta.');
                 } finally {
@@ -400,7 +447,7 @@
                 }
             }
 
-            async function selectMesaFast(mesaId){
+            async function selectMesaFast(mesaId) {
                 if (!mesaId) return;
 
                 rfToken++;
@@ -412,16 +459,15 @@
 
                 setMesaIdInUrl(mesaId);
 
-                // Skeleton inmediato (evita ver mesa anterior)
                 const deskC = document.getElementById('comandaPanelDesktop');
-                const mobC  = document.getElementById('mobileComandaPanel');
+                const mobC = document.getElementById('mobileComandaPanel');
                 const deskK = document.getElementById('cuentaPanelDesktop');
-                const mobK  = document.getElementById('mobileCuentaPanel');
+                const mobK = document.getElementById('mobileCuentaPanel');
 
                 if (deskC) deskC.innerHTML = skeletonBox();
-                if (mobC)  mobC.innerHTML  = skeletonBox();
+                if (mobC) mobC.innerHTML = skeletonBox();
                 if (deskK) deskK.innerHTML = skeletonBox();
-                if (mobK)  mobK.innerHTML  = skeletonBox();
+                if (mobK) mobK.innerHTML = skeletonBox();
 
                 if (isMobile()) switchTab('comanda');
 
@@ -433,11 +479,7 @@
             }
             window.selectMesaFast = selectMesaFast;
 
-            /* -------------------------
-               Delegaciones (clicks)
-            ------------------------- */
             function initDelegations() {
-                // ESC cierra
                 document.addEventListener('keydown', function (e) {
                     if (e.key !== 'Escape') return;
                     closeModal('modalOcupar');
@@ -445,8 +487,7 @@
                     closeModal('modalSolicitarCuenta');
                 });
 
-                // Backdrop click cierra
-                document.addEventListener('click', function(e){
+                document.addEventListener('click', function (e) {
                     const b = e.target.closest('.rf-modal-backdrop');
                     if (b && e.target === b) {
                         b.classList.add('hidden');
@@ -455,8 +496,7 @@
                     }
                 });
 
-                document.addEventListener('click', function(e){
-                    // ✅ seleccionar mesa (TU partial usa data-action="select-mesa")
+                document.addEventListener('click', function (e) {
                     const btnMesa = e.target.closest('[data-action="select-mesa"][data-mesa-id]');
                     if (btnMesa) {
                         e.preventDefault();
@@ -465,7 +505,6 @@
                         return;
                     }
 
-                    // ocupar modal
                     const ocupar = e.target.closest('[data-action="ocupar"]');
                     if (ocupar) {
                         e.preventDefault();
@@ -488,7 +527,6 @@
                         return;
                     }
 
-                    // add-items modal
                     const addItems = e.target.closest('[data-action="add-items"]');
                     if (addItems) {
                         e.preventDefault();
@@ -498,21 +536,47 @@
                         const form = document.getElementById('modalAddItemsForm');
                         const tpl = @json(route('mozo.mesas.items.add', ['mesa' => '__MESA__']));
                         const action = tpl.replace('__MESA__', String(mesaId));
+
                         if (form) form.action = action;
 
                         openModal('modalAddItems');
                         return;
                     }
 
-                    // solicitar cuenta (modal está en partial cuenta)
                     const solicitar = e.target.closest('[data-action="open-solicitar-cuenta"]');
                     if (solicitar) {
                         e.preventDefault();
+
+                        const mesaNombre = solicitar.getAttribute('data-mesa-nombre') || 'Mesa';
+                        const comandaId = solicitar.getAttribute('data-comanda-id') || '—';
+                        const subtotalFmt = solicitar.getAttribute('data-subtotal-fmt') || '0';
+                        const actionUrl = solicitar.getAttribute('data-action-url') || '';
+
+                        const form = document.getElementById('modalSolicitarCuentaForm');
+                        const title = document.getElementById('modalSolicitarCuentaTitle');
+                        const subtotal = document.getElementById('modalSolicitarCuentaSubtotal');
+                        const nota = document.getElementById('modalSolicitarCuentaNota');
+
+                        if (title) {
+                            title.textContent = `${mesaNombre} · #${comandaId}`;
+                        }
+
+                        if (subtotal) {
+                            subtotal.textContent = `$ ${subtotalFmt}`;
+                        }
+
+                        if (form && actionUrl) {
+                            form.action = actionUrl;
+                        }
+
+                        if (nota) {
+                            nota.value = '';
+                        }
+
                         openModal('modalSolicitarCuenta');
                         return;
                     }
 
-                    // cerrar modal
                     const close = e.target.closest('[data-action="close-modal"]');
                     if (close) {
                         e.preventDefault();
@@ -522,7 +586,6 @@
                     }
                 });
 
-                // back/forward
                 window.addEventListener('popstate', () => {
                     const mesaId = currentMesaId();
                     if (mesaId > 0) selectMesaFast(mesaId);

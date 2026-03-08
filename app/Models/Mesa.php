@@ -16,8 +16,6 @@ class Mesa extends Model
         'capacidad',
         'estado',
         'observacion',
-
-        // NUEVO
         'atendida_por',
         'atendida_at',
     ];
@@ -31,7 +29,6 @@ class Mesa extends Model
         'updated_at'    => 'datetime',
     ];
 
-    // Estados recomendados
     public const ESTADO_LIBRE = 'libre';
     public const ESTADO_OCUPADA = 'ocupada';
     public const ESTADO_RESERVADA = 'reservada';
@@ -47,19 +44,16 @@ class Mesa extends Model
         ];
     }
 
-    // (Opcional) Relación si tenés tabla locales
     public function local(): BelongsTo
     {
         return $this->belongsTo(Local::class, 'id_local');
     }
 
-    // NUEVO: quién está atendiendo la mesa (mozo/admin)
     public function mozoAtendiendo(): BelongsTo
     {
         return $this->belongsTo(User::class, 'atendida_por');
     }
 
-    // (Opcional) comandas históricas de la mesa
     public function comandas(): HasMany
     {
         return $this->hasMany(Comanda::class, 'id_mesa');

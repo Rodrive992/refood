@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Mozo;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-
 use App\Models\Mesa;
 use App\Models\Comanda;
 use App\Models\CartaCategoria;
@@ -12,14 +11,16 @@ use App\Models\CartaItem;
 
 class DashboardController extends Controller
 {
-    // =========================================================
-    // Helpers
-    // =========================================================
     private function localId(): int
     {
         $idLocal = auth()->user()->id_local ?? null;
         abort_if(empty($idLocal), 403, 'Tu usuario no tiene un local asignado.');
         return (int) $idLocal;
+    }
+
+    private function mozoId(): int
+    {
+        return (int) auth()->id();
     }
 
     private function comandaActivaDeMesa(int $mesaId): ?Comanda
@@ -37,9 +38,10 @@ class DashboardController extends Controller
 
     private function calcSubtotal(?Comanda $comanda): float
     {
-        if (!$comanda) return 0.0;
+        if (!$comanda) {
+            return 0.0;
+        }
 
-        // ✅ ya no hay "anulado": si se borra, no suma
         return (float) $comanda->items
             ->sum(fn($it) => (float) $it->precio_snapshot * (float) $it->cantidad);
     }
@@ -47,6 +49,7 @@ class DashboardController extends Controller
     private function mesasDelLocal(int $localId)
     {
         return Mesa::query()
+            ->with('mozoAtendiendo:id,name')
             ->where('id_local', $localId)
             ->orderByRaw("FIELD(estado,'ocupada','reservada','libre','inactiva','fuera_servicio')")
             ->orderBy('nombre')
@@ -59,28 +62,22 @@ class DashboardController extends Controller
             ->where('id_local', $localId)
             ->whereNotNull('id_mesa')
             ->whereIn('estado', ['abierta', 'en_cocina', 'lista', 'entregada'])
+            ->withCount('items')
             ->latest('id')
             ->get()
             ->keyBy('id_mesa');
     }
 
-    /**
-     * Compat para el dashboard:
-     * - desktop|mobile (desde tus fetch)
-     * - default desktop (no rompe nada)
-     */
     private function viewMode(Request $request): string
     {
         $view = strtolower((string) $request->get('view', 'desktop'));
         return in_array($view, ['mobile', 'desktop'], true) ? $view : 'desktop';
     }
 
-    // =========================================================
-    // Dashboard
-    // =========================================================
     public function index(Request $request)
     {
         $localId = $this->localId();
+        $mozoId  = $this->mozoId();
         $mesaId  = (int) $request->get('mesa_id', 0);
 
         $mesas = $this->mesasDelLocal($localId);
@@ -91,13 +88,13 @@ class DashboardController extends Controller
 
         if ($mesaId > 0) {
             $mesaActiva = $mesas->firstWhere('id', $mesaId);
+
             if ($mesaActiva) {
                 $comandaActiva = $this->comandaActivaDeMesa((int) $mesaActiva->id);
                 $subtotal = $this->calcSubtotal($comandaActiva);
             }
         }
 
-        // Carta (solo activos del local)
         $cartaCategorias = CartaCategoria::query()
             ->where('id_local', $localId)
             ->where('activo', 1)
@@ -121,18 +118,15 @@ class DashboardController extends Controller
             'subtotal',
             'cartaCategorias',
             'cartaItems',
-            'comandasActivasPorMesa'
+            'comandasActivasPorMesa',
+            'mozoId'
         ));
     }
 
-    // =========================================================
-    // PARTIAL: MESAS
-    // GET /mozo/dashboard/mesas?view=mobile|desktop&mesa_id=XX
-    // Devuelve: mozo.partials.mesa (unificado)
-    // =========================================================
     public function partialMesas(Request $request)
     {
         $localId = $this->localId();
+        $mozoId = $this->mozoId();
         $view = $this->viewMode($request);
         $mesaId = (int) $request->get('mesa_id', 0);
 
@@ -149,17 +143,14 @@ class DashboardController extends Controller
             'mesas' => $mesas,
             'comandasActivasPorMesa' => $comandasActivasPorMesa,
             'mesaSelected' => $mesaSelected,
+            'mozoId' => $mozoId,
         ]);
     }
 
-    // =========================================================
-    // PARTIAL: COMANDA
-    // GET /mozo/dashboard/comanda?mesa_id=XX&view=mobile|desktop
-    // Devuelve: mozo.partials.comanda (unificado)
-    // =========================================================
     public function partialComanda(Request $request)
     {
         $localId = $this->localId();
+        $mozoId = $this->mozoId();
         $view = $this->viewMode($request);
         $mesaId  = (int) $request->get('mesa_id', 0);
 
@@ -169,6 +160,7 @@ class DashboardController extends Controller
 
         if ($mesaId > 0) {
             $mesaActiva = Mesa::query()
+                ->with('mozoAtendiendo:id,name')
                 ->where('id_local', $localId)
                 ->where('id', $mesaId)
                 ->first();
@@ -184,17 +176,14 @@ class DashboardController extends Controller
             'mesaSelected' => $mesaActiva,
             'comanda'      => $comandaActiva,
             'subtotal'     => $subtotal,
+            'mozoId'       => $mozoId,
         ]);
     }
 
-    // =========================================================
-    // PARTIAL: CUENTA
-    // GET /mozo/dashboard/cuenta?mesa_id=XX&view=mobile|desktop
-    // Devuelve: mozo.partials.cuenta (unificado)
-    // =========================================================
     public function partialCuenta(Request $request)
     {
         $localId = $this->localId();
+        $mozoId = $this->mozoId();
         $view = $this->viewMode($request);
         $mesaId  = (int) $request->get('mesa_id', 0);
 
@@ -204,6 +193,7 @@ class DashboardController extends Controller
 
         if ($mesaId > 0) {
             $mesaActiva = Mesa::query()
+                ->with('mozoAtendiendo:id,name')
                 ->where('id_local', $localId)
                 ->where('id', $mesaId)
                 ->first();
@@ -219,6 +209,7 @@ class DashboardController extends Controller
             'mesaSelected' => $mesaActiva,
             'comanda'      => $comandaActiva,
             'subtotal'     => $subtotal,
+            'mozoId'       => $mozoId,
         ]);
     }
 }
