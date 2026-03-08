@@ -472,4 +472,28 @@ class CajaController extends Controller
             'ts' => now()->toISOString(),
         ]);
     }
+
+    /**
+     * Print preticket directly (for iframe printing).
+     * 
+     * @param Comanda $comanda
+     * @return \Illuminate\View\View
+     */
+    public function printPreticket(Comanda $comanda)
+    {
+        $localId = $this->localId();
+        abort_unless((int) $comanda->id_local === $localId, 403);
+
+        if ((int)($comanda->cuenta_solicitada ?? 0) !== 1) {
+            abort(404, 'La cuenta no ha sido solicitada');
+        }
+
+        $comanda->load(['mesa', 'mozo', 'items' => fn($q) => $q->orderBy('id')]);
+
+        $subtotal = (float) $comanda->items
+            ->where('estado', '!=', 'anulado')
+            ->sum(fn($it) => (float) $it->precio_snapshot * (float) $it->cantidad);
+
+        return view('admin.caja.cuenta_print', compact('comanda', 'subtotal'));
+    }
 }

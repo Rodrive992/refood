@@ -1,3 +1,5 @@
+{{-- resources/views/admin/caja/show.blade.php --}}
+
 @extends('layouts.app')
 
 @section('content')
@@ -11,209 +13,222 @@
 
 <div class="max-w-7xl mx-auto px-4 md:px-6 py-6">
 
-    {{-- Flash / errores --}}
+    {{-- Flash / errores compactos --}}
     @if (session('ok'))
-        <div class="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-900 px-4 py-3">
+        <div class="mb-4 rounded-xl px-4 py-2.5 text-sm flex items-center gap-2" style="background: #ECFDF5; border: 1px solid #D1FAE5; color: #065F46;">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
             {{ session('ok') }}
         </div>
     @endif
 
-    @if (session('error'))
-        <div class="mb-4 rounded-xl border border-red-200 bg-red-50 text-red-900 px-4 py-3">
-            {{ session('error') }}
-        </div>
-    @endif
-
-    @if ($errors->any())
-        <div class="mb-4 rounded-xl border border-red-200 bg-red-50 text-red-900 px-4 py-3">
-            <div class="font-bold mb-1">Revisá estos errores:</div>
-            <ul class="list-disc list-inside text-sm">
-                @foreach ($errors->all() as $e)
-                    <li>{{ $e }}</li>
-                @endforeach
-            </ul>
-        </div>
-    @endif
-
-    {{-- ✅ Banner turno/caja --}}
-    <div class="mb-4 rounded-2xl border border-slate-200 bg-white shadow-sm p-4">
-        @if($hayCaja)
-            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-                <div>
-                    <div class="text-xs font-bold text-slate-500">Turno activo</div>
-                    <div class="text-lg font-extrabold text-slate-900">
-                        Caja ABIERTA · Turno #{{ $cajaAbierta->turno }} · {{ optional($cajaAbierta->fecha)->format('d/m/Y') }}
-                    </div>
-                    <div class="text-sm text-slate-600 mt-1">
-                        Apertura: $ {{ number_format((float)$cajaAbierta->efectivo_apertura, 2, ',', '.') }}
-                        · Ingreso: $ {{ number_format((float)$cajaAbierta->ingreso_efectivo, 2, ',', '.') }}
-                        · Salida: $ {{ number_format((float)$cajaAbierta->salida_efectivo, 2, ',', '.') }}
-                        · Efectivo turno: <span class="font-extrabold text-slate-900">$ {{ number_format((float)$cajaAbierta->efectivo_turno, 2, ',', '.') }}</span>
-                    </div>
+    @if (session('error') || $errors->any())
+        <div class="mb-4 rounded-xl px-4 py-2.5 text-sm" style="background: #FEF2F2; border: 1px solid #FEE2E2; color: #991B1B;">
+            @if (session('error'))
+                <div class="flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    {{ session('error') }}
                 </div>
+            @endif
+            @if ($errors->any())
+                <div class="flex items-start gap-2 mt-1">
+                    <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                    <ul class="list-disc pl-4">
+                        @foreach ($errors->all() as $e)
+                            <li>{{ $e }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+        </div>
+    @endif
 
-                <div class="text-xs font-extrabold px-3 py-2 rounded-full bg-emerald-100 text-emerald-800 inline-flex w-fit">
-                    OK para cobrar
+    {{-- Banner turno compacto --}}
+    <div class="mb-5 rounded-xl p-4" style="background: white; border: 1px solid #E2E8F0;">
+        @if($hayCaja)
+            <div class="flex flex-wrap items-center gap-4">
+                <div class="flex items-center gap-3">
+                    <span class="relative flex h-2.5 w-2.5">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                    </span>
+                    <span class="text-xs font-medium uppercase tracking-wider" style="color: #64748B;">Turno #{{ $cajaAbierta->turno }}</span>
+                </div>
+                <div class="flex flex-wrap items-center gap-3 text-sm">
+                    <span style="color: #475569;">Apertura: <strong style="color: #0F172A;">${{ number_format((float)$cajaAbierta->efectivo_apertura, 0, ',', '.') }}</strong></span>
+                    <span style="color: #475569;">Ingresos: <strong class="text-emerald-600">${{ number_format((float)$cajaAbierta->ingreso_efectivo, 0, ',', '.') }}</strong></span>
+                    <span style="color: #475569;">Salidas: <strong class="text-red-600">${{ number_format((float)$cajaAbierta->salida_efectivo, 0, ',', '.') }}</strong></span>
+                    <span style="color: #475569;">Efectivo: <strong style="color: #0F172A;">${{ number_format((float)$cajaAbierta->efectivo_turno, 0, ',', '.') }}</strong></span>
+                </div>
+                <div class="ml-auto">
+                    <span class="px-3 py-1.5 rounded-full text-xs font-medium" style="background: #ECFDF5; color: #065F46;">
+                        ✅ OK para cobrar
+                    </span>
                 </div>
             </div>
         @else
-            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-                <div>
-                    <div class="text-xs font-bold text-slate-500">Turno</div>
-                    <div class="text-lg font-extrabold text-slate-900">No hay caja abierta</div>
-                    <div class="text-sm text-slate-600 mt-1">
-                        Para cobrar, primero abrí un turno en
-                        <a href="{{ route('admin.caja.index') }}" class="font-extrabold underline">Caja</a>.
-                    </div>
-                </div>
-
-                <div class="text-xs font-extrabold px-3 py-2 rounded-full bg-amber-100 text-amber-800 inline-flex w-fit">
-                    Bloqueado
-                </div>
+            <div class="flex flex-wrap items-center gap-4">
+                <span class="w-2.5 h-2.5 rounded-full bg-slate-300"></span>
+                <span class="text-sm" style="color: #64748B;">No hay turno activo</span>
+                <a href="{{ route('admin.caja.index') }}" class="text-sm font-medium ml-auto" style="color: #DC2626;">
+                    Abrir turno →
+                </a>
             </div>
         @endif
     </div>
 
     {{-- Header --}}
-    <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-3 mb-5">
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-5">
         <div>
-            <h1 class="text-xl md:text-2xl font-extrabold text-slate-900">
-                Caja · Cobrar comanda #{{ $comanda->id }}
-            </h1>
-            <p class="text-sm text-slate-600">
-                Mesa: <span class="font-semibold text-slate-800">{{ $mesa->nombre ?? 'Sin mesa' }}</span>
-                · Mozo: <span class="font-semibold text-slate-800">{{ $mozo->name ?? '—' }}</span>
+            <div class="flex items-center gap-3">
+                <h1 class="text-xl md:text-2xl font-extrabold" style="color: #0F172A;">
+                    Cobrar comanda #{{ $comanda->id }}
+                </h1>
+                <span class="px-3 py-1 rounded-full text-xs font-medium" style="background: #FEF3C7; color: #92400E;">
+                    {{ optional($comanda->cuenta_solicitada_at)->format('d/m H:i') }}
+                </span>
+            </div>
+            <p class="text-sm mt-1" style="color: #64748B;">
+                Mesa: <span class="font-medium" style="color: #0F172A;">{{ $mesa->nombre ?? 'Sin mesa' }}</span>
+                · Mozo: <span class="font-medium" style="color: #0F172A;">{{ $mozo->name ?? '—' }}</span>
             </p>
+            @if (!empty($comanda->cuenta_solicitada_nota))
+                <p class="text-xs mt-2 italic" style="color: #64748B;">📝 {{ $comanda->cuenta_solicitada_nota }}</p>
+            @endif
         </div>
 
-        <div class="flex flex-wrap gap-2">
+        <div class="flex gap-2">
             <a href="{{ route('admin.caja.index') }}"
-               class="rounded-xl px-4 py-2 font-semibold border border-slate-200 bg-white hover:bg-slate-50">
-                ← Volver a caja
+               class="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1"
+               style="background: white; border: 1px solid #E2E8F0; color: #475569;">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                </svg>
+                Volver
             </a>
 
-            <a href="{{ route('admin.caja.cuenta', $comanda) }}" target="_blank"
-               class="rounded-xl px-4 py-2 font-semibold text-white"
-               style="background: var(--rf-secondary);">
-                Ver cuenta (pre-ticket)
+            <a href="{{ route('admin.caja.cuenta.print', $comanda) }}" 
+               target="_blank"
+               class="js-print-preticket px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1"
+               style="background: #F8FAFC; border: 1px solid #E2E8F0; color: #475569;"
+               data-print-url="{{ route('admin.caja.cuenta.print', $comanda) }}"
+               data-comanda-id="{{ $comanda->id }}">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+                </svg>
+                Pre-ticket
             </a>
 
             <button type="button"
-                    class="rounded-xl px-4 py-2 font-semibold text-white {{ !$hayCaja ? 'opacity-50 cursor-not-allowed' : '' }}"
-                    style="background: var(--rf-primary);"
+                    class="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1 {{ !$hayCaja ? 'opacity-50 cursor-not-allowed' : '' }}"
+                    style="background: #0F172A; color: white;"
                     {{ !$hayCaja ? 'disabled' : '' }}
                     data-action="open-modal"
                     data-modal="modalAddItemsAdmin">
-                + Agregar items
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                </svg>
+                Agregar
             </button>
         </div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+    {{-- Grid principal --}}
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
 
         {{-- DETALLE --}}
-        <section class="lg:col-span-7 rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-            <div class="px-4 py-4 border-b border-slate-200">
-                <div class="flex items-center justify-between gap-3">
-                    <h2 class="text-lg font-extrabold text-slate-900">Detalle</h2>
-                    <div class="text-xs font-semibold px-2 py-1 rounded-full bg-slate-100 text-slate-700">
-                        Cuenta solicitada:
-                        {{ $comanda->cuenta_solicitada_at ? \Carbon\Carbon::parse($comanda->cuenta_solicitada_at)->format('d/m H:i') : '—' }}
-                    </div>
-                </div>
-
-                @if (!empty($comanda->cuenta_solicitada_nota))
-                    <div class="mt-2 text-sm text-slate-700">
-                        <span class="font-semibold">Nota mozo:</span>
-                        {{ $comanda->cuenta_solicitada_nota }}
-                    </div>
-                @endif
+        <section class="lg:col-span-7 rounded-xl overflow-hidden" style="background: white; border: 1px solid #E2E8F0;">
+            <div class="px-4 py-3 flex items-center justify-between" style="border-bottom: 1px solid #F1F5F9;">
+                <h2 class="font-bold" style="color: #0F172A;">Detalle de la comanda</h2>
+                <span class="text-xs font-medium px-2 py-1 rounded-full" style="background: #F1F5F9; color: #475569;">
+                    {{ $comanda->items->where('estado','!=','anulado')->count() }} items
+                </span>
             </div>
 
             <div class="p-4">
-                <div class="rounded-2xl border border-slate-200 overflow-hidden">
-                    <div class="bg-slate-50 px-4 py-3 border-b border-slate-200 flex justify-between text-sm font-semibold text-slate-700">
-                        <div>Item</div>
-                        <div class="flex gap-6">
-                            <div class="w-16 text-right">Cant</div>
-                            <div class="w-24 text-right">Total</div>
-                            <div class="w-20 text-right">Acción</div>
-                        </div>
-                    </div>
-
-                    <div class="divide-y divide-slate-200">
-                        @forelse($comanda->items->where('estado','!=','anulado') as $it)
-                            <div class="px-4 py-3 flex justify-between gap-3">
-                                <div class="min-w-0">
-                                    <div class="font-semibold text-slate-900 truncate">
-                                        {{ $it->nombre_snapshot }}
-                                    </div>
-                                    <div class="text-xs text-slate-600 mt-1">
-                                        $ {{ number_format((float) $it->precio_snapshot, 2, ',', '.') }}
-                                        · <span class="font-semibold">{{ $it->estado }}</span>
-                                    </div>
+                {{-- Items --}}
+                <div class="space-y-2">
+                    @forelse($comanda->items->where('estado','!=','anulado') as $it)
+                        <div class="flex items-start justify-between gap-3 p-2 rounded-lg hover:bg-slate-50 transition-colors">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-medium text-sm" style="color: #0F172A;">{{ $it->nombre_snapshot }}</span>
+                                    <span class="text-[10px] px-1.5 py-0.5 rounded-full" 
+                                          style="background: #F1F5F9; color: #475569;">
+                                        {{ $it->estado }}
+                                    </span>
+                                </div>
+                                <div class="flex items-center gap-3 mt-1 text-xs" style="color: #64748B;">
+                                    <span>${{ number_format((float) $it->precio_snapshot, 0, ',', '.') }} c/u</span>
+                                    <span>× {{ rtrim(rtrim(number_format((float) $it->cantidad, 2, '.', ''), '0'), '.') }}</span>
                                     @if ($it->nota)
-                                        <div class="text-xs text-slate-500 mt-1">
-                                            * {{ $it->nota }}
-                                        </div>
+                                        <span class="italic">📝 {{ $it->nota }}</span>
                                     @endif
                                 </div>
-
-                                <div class="flex items-start gap-4 shrink-0">
-                                    <div class="text-right">
-                                        <div class="w-16 text-right font-bold text-slate-900">
-                                            {{ rtrim(rtrim(number_format((float) $it->cantidad, 2, '.', ''), '0'), '.') }}
-                                        </div>
-                                        <div class="w-24 text-right font-extrabold text-slate-900">
-                                            $ {{ number_format((float) $it->precio_snapshot * (float) $it->cantidad, 2, ',', '.') }}
-                                        </div>
-                                    </div>
-
-                                    <div class="w-20 text-right">
-                                        <form method="POST"
-                                              action="{{ route('admin.caja.items.delete', $it) }}"
-                                              onsubmit="return confirm('¿Eliminar este item?')">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit"
-                                                    {{ !$hayCaja ? 'disabled' : '' }}
-                                                    class="rounded-xl px-3 py-2 text-xs font-extrabold border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 {{ !$hayCaja ? 'opacity-50 cursor-not-allowed' : '' }}">
-                                                Eliminar
-                                            </button>
-                                        </form>
-                                    </div>
-                                </div>
                             </div>
-                        @empty
-                            <div class="px-4 py-4 text-sm text-slate-600">
-                                No hay items.
+                            
+                            <div class="flex items-center gap-3">
+                                <span class="font-bold text-sm" style="color: #0F172A;">
+                                    ${{ number_format((float) $it->precio_snapshot * (float) $it->cantidad, 0, ',', '.') }}
+                                </span>
+                                
+                                <form method="POST" action="{{ route('admin.caja.items.delete', $it) }}"
+                                      onsubmit="return confirm('¿Eliminar este item?')">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit"
+                                            {{ !$hayCaja ? 'disabled' : '' }}
+                                            class="p-1 rounded-lg text-xs {{ !$hayCaja ? 'opacity-30 cursor-not-allowed' : 'hover:bg-red-50' }}"
+                                            style="color: #DC2626;">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                        </svg>
+                                    </button>
+                                </form>
                             </div>
-                        @endforelse
-                    </div>
+                        </div>
+                    @empty
+                        <div class="text-center py-6">
+                            <div class="inline-flex items-center justify-center w-12 h-12 rounded-full mb-3" style="background: #F1F5F9;">
+                                <svg class="w-6 h-6" style="color: #94A3B8;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                </svg>
+                            </div>
+                            <p class="text-sm" style="color: #64748B;">No hay items en esta comanda</p>
+                        </div>
+                    @endforelse
                 </div>
 
-                <div class="mt-4 flex items-center justify-between">
-                    <div class="text-slate-600 text-sm">Subtotal</div>
-                    <div class="text-xl font-extrabold text-slate-900" id="subtotalText">
-                        $ {{ number_format((float) $subtotal, 2, ',', '.') }}
-                    </div>
+                {{-- Subtotal --}}
+                <div class="mt-4 pt-3 flex items-center justify-between border-t" style="border-color: #F1F5F9;">
+                    <span class="text-sm" style="color: #64748B;">Subtotal</span>
+                    <span class="text-lg font-bold" style="color: #0F172A;" id="subtotalText">
+                        ${{ number_format((float) $subtotal, 0, ',', '.') }}
+                    </span>
                 </div>
             </div>
         </section>
 
         {{-- COBRO --}}
-        <section class="lg:col-span-5 rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-            <div class="px-4 py-4 border-b border-slate-200">
-                <h2 class="text-lg font-extrabold text-slate-900">Cobro</h2>
-                <p class="text-sm text-slate-600 mt-1">Pagos dinámicos (efectivo / débito / transferencia)</p>
+        <section class="lg:col-span-5 rounded-xl overflow-hidden" style="background: white; border: 1px solid #E2E8F0;">
+            <div class="px-4 py-3" style="border-bottom: 1px solid #F1F5F9;">
+                <h2 class="font-bold" style="color: #0F172A;">Cobro</h2>
+                <p class="text-xs mt-1" style="color: #64748B;">Pagos dinámicos (efectivo / débito / transferencia)</p>
             </div>
 
             @if(!$hayCaja)
                 <div class="p-4">
-                    <div class="rounded-2xl border border-amber-200 bg-amber-50 text-amber-900 px-4 py-3">
-                        <div class="font-extrabold">No podés cobrar sin turno abierto.</div>
-                        <div class="text-sm mt-1">
-                            Volvé a <a class="underline font-extrabold" href="{{ route('admin.caja.index') }}">Caja</a> y abrí el turno.
+                    <div class="rounded-lg p-3 text-sm" style="background: #FEF2F2; border: 1px solid #FEE2E2; color: #991B1B;">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                            </svg>
+                            No podés cobrar sin turno abierto
                         </div>
                     </div>
                 </div>
@@ -225,98 +240,101 @@
                   action="{{ route('admin.caja.cobrar', $comanda) }}">
                 @csrf
 
-                {{-- Ajustes --}}
+                {{-- Ajustes en grid compacto --}}
                 <div class="grid grid-cols-3 gap-2">
                     <div>
-                        <label class="block text-sm font-semibold text-slate-700">Descuento</label>
-                        <input type="number" step="0.01" min="0" name="descuento"
-                               class="mt-1 w-full rounded-xl border-slate-200"
-                               placeholder="0,00"
-                               value="{{ old('descuento', '0') }}"
-                               oninput="recalcTotales()">
+                        <label class="block text-xs font-medium mb-1" style="color: #475569;">Descuento</label>
+                        <div class="relative">
+                            <span class="absolute left-2 top-1/2 -translate-y-1/2 text-xs" style="color: #94A3B8;">$</span>
+                            <input type="number" step="0.01" min="0" name="descuento"
+                                   class="w-full pl-6 pr-2 py-1.5 rounded-lg text-xs"
+                                   style="border: 1px solid #E2E8F0; background: white;"
+                                   placeholder="0"
+                                   value="{{ old('descuento', '0') }}"
+                                   oninput="recalcTotales()">
+                        </div>
                     </div>
 
                     <div>
-                        <label class="block text-sm font-semibold text-slate-700">Recargo</label>
-                        <input type="number" step="0.01" min="0" name="recargo"
-                               class="mt-1 w-full rounded-xl border-slate-200"
-                               placeholder="0,00"
-                               value="{{ old('recargo', '0') }}"
-                               oninput="recalcTotales()">
+                        <label class="block text-xs font-medium mb-1" style="color: #475569;">Recargo</label>
+                        <div class="relative">
+                            <span class="absolute left-2 top-1/2 -translate-y-1/2 text-xs" style="color: #94A3B8;">$</span>
+                            <input type="number" step="0.01" min="0" name="recargo"
+                                   class="w-full pl-6 pr-2 py-1.5 rounded-lg text-xs"
+                                   style="border: 1px solid #E2E8F0; background: white;"
+                                   placeholder="0"
+                                   value="{{ old('recargo', '0') }}"
+                                   oninput="recalcTotales()">
+                        </div>
                     </div>
 
                     <div>
-                        <label class="block text-sm font-semibold text-slate-700">Propina</label>
-                        <input type="number" step="0.01" min="0" name="propina"
-                               class="mt-1 w-full rounded-xl border-slate-200"
-                               placeholder="0,00"
-                               value="{{ old('propina', '0') }}"
-                               oninput="recalcTotales()">
+                        <label class="block text-xs font-medium mb-1" style="color: #475569;">Propina</label>
+                        <div class="relative">
+                            <span class="absolute left-2 top-1/2 -translate-y-1/2 text-xs" style="color: #94A3B8;">$</span>
+                            <input type="number" step="0.01" min="0" name="propina"
+                                   class="w-full pl-6 pr-2 py-1.5 rounded-lg text-xs"
+                                   style="border: 1px solid #E2E8F0; background: white;"
+                                   placeholder="0"
+                                   value="{{ old('propina', '0') }}"
+                                   oninput="recalcTotales()">
+                        </div>
                     </div>
                 </div>
 
-                {{-- Totales --}}
-                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <div class="flex items-center justify-between">
-                        <div class="text-sm text-slate-600">Total a cobrar</div>
-                        <div class="text-xl font-extrabold text-slate-900" id="totalCobrarText"></div>
-                    </div>
-
-                    <div class="mt-1 flex items-center justify-between">
-                        <div class="text-sm text-slate-600">Propina</div>
-                        <div class="text-base font-bold text-slate-900" id="propinaText"></div>
-                    </div>
-
-                    <div class="mt-2 flex items-center justify-between">
-                        <div class="text-sm text-slate-600">Pagado</div>
-                        <div class="text-base font-bold text-slate-900" id="pagadoText"></div>
-                    </div>
-
-                    <div class="mt-1 flex items-center justify-between">
-                        <div class="text-sm text-slate-600">Vuelto</div>
-                        <div class="text-base font-bold text-slate-900" id="vueltoText"></div>
-                    </div>
-
-                    <div class="mt-2 text-xs text-slate-500">
-                        La propina se registra aparte. No modifica el total del ticket ni el vuelto.
+                {{-- Totales compactos --}}
+                <div class="rounded-lg p-3" style="background: #F8FAFC; border: 1px solid #E2E8F0;">
+                    <div class="space-y-1.5">
+                        <div class="flex items-center justify-between text-sm">
+                            <span style="color: #475569;">Total a cobrar</span>
+                            <span class="font-bold" style="color: #0F172A;" id="totalCobrarText"></span>
+                        </div>
+                        <div class="flex items-center justify-between text-xs">
+                            <span style="color: #64748B;">Propina</span>
+                            <span style="color: #D97706;" id="propinaText"></span>
+                        </div>
+                        <div class="flex items-center justify-between text-xs pt-1 border-t" style="border-color: #E2E8F0;">
+                            <span style="color: #64748B;">Pagado</span>
+                            <span style="color: #0F172A;" id="pagadoText"></span>
+                        </div>
+                        <div class="flex items-center justify-between text-xs">
+                            <span style="color: #64748B;">Vuelto</span>
+                            <span style="color: #0F172A;" id="vueltoText"></span>
+                        </div>
                     </div>
                 </div>
 
                 {{-- Pagos dinámicos --}}
-                <div class="rounded-2xl border border-slate-200 p-3">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <div class="text-sm font-extrabold text-slate-900">Pagos</div>
-                            <div class="text-xs text-slate-500">Agregá uno o varios pagos (mixto)</div>
-                        </div>
-
+                <div class="rounded-lg p-3" style="background: white; border: 1px solid #E2E8F0;">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-medium" style="color: #475569;">Pagos</span>
                         <button id="btnAddPago" type="button"
-                                class="rounded-xl px-3 py-2 font-semibold text-white"
-                                style="background: var(--rf-primary);">
-                            + Agregar pago
+                                class="px-2 py-1 rounded-lg text-xs font-medium flex items-center gap-1"
+                                style="background: #0F172A; color: white;">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                            </svg>
+                            Agregar
                         </button>
                     </div>
-
-                    <div id="pagosWrap" class="mt-3 space-y-2"></div>
+                    <div id="pagosWrap" class="space-y-2"></div>
                 </div>
 
                 {{-- Nota --}}
-                <div>
-                    <label class="block text-sm font-semibold text-slate-700">Nota (opcional)</label>
-                    <input name="nota" class="mt-1 w-full rounded-xl border-slate-200"
-                           placeholder="Ej: descuento acordado / factura A / etc"
-                           value="{{ old('nota') }}">
-                </div>
+                <input name="nota" class="w-full px-3 py-2 rounded-lg text-xs" 
+                       style="border: 1px solid #E2E8F0; background: white;"
+                       placeholder="Nota (opcional) · Ej: descuento acordado"
+                       value="{{ old('nota') }}">
 
                 <button type="submit"
-                        class="w-full rounded-xl px-4 py-3 font-extrabold text-white"
-                        style="background: var(--rf-secondary);">
+                        class="w-full py-2.5 rounded-lg text-sm font-bold text-white transition-all hover:shadow-lg"
+                        style="background: #059669;">
                     Cobrar e imprimir ticket
                 </button>
 
-                <div class="text-xs text-slate-500">
-                    Al confirmar: registra venta, guarda pagos, cierra comanda, libera mesa, imprime y vuelve a caja.
-                </div>
+                <p class="text-[10px] text-center" style="color: #94A3B8;">
+                    Al confirmar: registra venta, guarda pagos, cierra comanda y libera mesa
+                </p>
             </form>
         </section>
     </div>
@@ -324,27 +342,25 @@
 
 {{-- MODAL: Agregar items --}}
 <div id="modalAddItemsAdmin"
-     class="hidden fixed inset-0 z-50 rf-modal-backdrop"
-     style="background: rgba(0,0,0,0.45);">
+     class="hidden fixed inset-0 z-50"
+     style="background: rgba(0,0,0,0.45); backdrop-filter: blur(2px);">
 
     <div class="min-h-full w-full flex items-end md:items-center justify-center p-0 md:p-4 overflow-y-auto">
-        <div class="bg-white w-full md:w-[96%] md:max-w-3xl rounded-t-3xl md:rounded-3xl shadow-xl border animate-fade-in
-                    flex flex-col max-h-[92vh] md:max-h-[85vh]"
-             style="border-color: var(--rf-border);">
+        <div class="bg-white w-full md:w-[96%] md:max-w-3xl rounded-t-2xl md:rounded-2xl shadow-xl flex flex-col max-h-[92vh] md:max-h-[85vh]"
+             style="border: 1px solid #E2E8F0;">
 
-            <div class="p-4 border-b flex items-center justify-between gap-3 shrink-0"
-                 style="border-color: var(--rf-border);">
+            <div class="px-4 py-3 border-b flex items-center justify-between" style="border-color: #F1F5F9;">
                 <div>
-                    <h3 class="font-bold text-lg">Agregar items (Caja)</h3>
-                    <p class="text-sm mt-1" style="color: var(--rf-text-light);">
-                        Elegí un item y cantidad. Podés agregar varias líneas.
-                    </p>
+                    <h3 class="font-bold" style="color: #0F172A;">Agregar items</h3>
+                    <p class="text-xs mt-0.5" style="color: #64748B;">Elegí un item y cantidad. Podés agregar varias líneas.</p>
                 </div>
-
                 <button type="button"
-                        class="p-2 rounded-xl border rf-hover-lift"
-                        style="border-color: var(--rf-border);"
-                        data-action="close-modal" data-modal="modalAddItemsAdmin">✕</button>
+                        class="p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+                        data-action="close-modal" data-modal="modalAddItemsAdmin">
+                    <svg class="w-5 h-5" style="color: #64748B;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
             </div>
 
             <div class="p-4 overflow-y-auto rf-scrollbar grow" data-modal-body="1">
@@ -356,67 +372,53 @@
 
                     <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
                         <div class="sm:col-span-6">
-                            <label class="text-sm font-semibold" style="color: var(--rf-text);">Item</label>
-
+                            <label class="block text-xs font-medium mb-1" style="color: #475569;">Item</label>
                             <select id="rfAdminAddItemSelect"
-                                    class="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
-                                    style="border-color: var(--rf-border);">
+                                    class="w-full px-3 py-2 rounded-lg text-sm"
+                                    style="border: 1px solid #E2E8F0; background: white;">
                                 <option value="">— Seleccionar —</option>
-
                                 @foreach(($cartaCategorias ?? collect()) as $cat)
                                     <optgroup label="{{ $cat->nombre }}">
                                         @foreach(($cartaItems ?? collect())->where('id_categoria', $cat->id) as $it)
                                             <option value="{{ $it->id }}" data-precio="{{ $it->precio }}">
-                                                {{ $it->nombre }} ({{ number_format((float)$it->precio, 0, ',', '.') }})
+                                                {{ $it->nombre }} (${{ number_format((float)$it->precio, 0, ',', '.') }})
                                             </option>
                                         @endforeach
                                     </optgroup>
                                 @endforeach
-
-                                @php
-                                    $sinCat = ($cartaItems ?? collect())->whereNull('id_categoria');
-                                @endphp
-                                @if($sinCat->count())
-                                    <optgroup label="Sin categoría">
-                                        @foreach($sinCat as $it)
-                                            <option value="{{ $it->id }}" data-precio="{{ $it->precio }}">
-                                                {{ $it->nombre }} ({{ number_format((float)$it->precio, 0, ',', '.') }})
-                                            </option>
-                                        @endforeach
-                                    </optgroup>
-                                @endif
                             </select>
                         </div>
 
                         <div class="sm:col-span-2">
-                            <label class="text-sm font-semibold" style="color: var(--rf-text);">Cant.</label>
+                            <label class="block text-xs font-medium mb-1" style="color: #475569;">Cant.</label>
                             <input id="rfAdminAddItemQty" type="number" min="0.01" step="0.01" value="1"
-                                   class="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
-                                   style="border-color: var(--rf-border);">
+                                   class="w-full px-3 py-2 rounded-lg text-sm"
+                                   style="border: 1px solid #E2E8F0; background: white;">
                         </div>
 
                         <div class="sm:col-span-4">
-                            <label class="text-sm font-semibold" style="color: var(--rf-text);">Nota</label>
+                            <label class="block text-xs font-medium mb-1" style="color: #475569;">Nota</label>
                             <input id="rfAdminAddItemNote" type="text" placeholder="Opcional"
-                                   class="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
-                                   style="border-color: var(--rf-border);">
+                                   class="w-full px-3 py-2 rounded-lg text-sm"
+                                   style="border: 1px solid #E2E8F0; background: white;">
                         </div>
 
                         <div class="sm:col-span-12 flex justify-end">
                             <button id="rfAdminAddLineBtn" type="button"
-                                    class="px-4 py-2 rounded-xl text-sm font-semibold rf-hover-lift"
-                                    style="background: var(--rf-secondary); color: white;">
-                                + Agregar línea
+                                    class="px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-1"
+                                    style="background: #059669; color: white;">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                                </svg>
+                                Agregar línea
                             </button>
                         </div>
                     </div>
 
-                    <div class="rounded-2xl border p-3"
-                         style="border-color: var(--rf-border); background: var(--rf-bg);">
-                        <div class="text-sm font-bold mb-2" style="color: var(--rf-text);">Detalle</div>
-
+                    <div class="rounded-lg p-3" style="background: #F8FAFC; border: 1px solid #E2E8F0;">
+                        <div class="text-xs font-medium mb-2" style="color: #475569;">Líneas a agregar</div>
                         <div id="rfAdminLines" class="space-y-2">
-                            <div class="text-sm" style="color: var(--rf-text-light);">
+                            <div class="text-xs text-center py-4" style="color: #94A3B8;">
                                 No hay líneas todavía.
                             </div>
                         </div>
@@ -424,23 +426,38 @@
                 </form>
             </div>
 
-            <div class="p-4 border-t shrink-0 flex items-center justify-end gap-2"
-                 style="border-color: var(--rf-border);">
+            <div class="px-4 py-3 border-t flex items-center justify-end gap-2" style="border-color: #F1F5F9;">
                 <button type="button"
-                        class="px-4 py-2 rounded-xl text-sm font-semibold border"
-                        style="border-color: var(--rf-border);"
+                        class="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                        style="background: white; border: 1px solid #E2E8F0; color: #475569;"
                         data-action="close-modal" data-modal="modalAddItemsAdmin">
                     Cancelar
                 </button>
-
                 <button type="submit"
                         form="modalAddItemsAdminForm"
-                        class="px-4 py-2 rounded-xl text-sm font-semibold"
-                        style="background: var(--rf-primary); color: white;">
-                    Guardar
+                        class="px-4 py-2 rounded-lg text-sm font-medium text-white"
+                        style="background: #0F172A;">
+                    Guardar cambios
                 </button>
             </div>
         </div>
+    </div>
+</div>
+
+{{-- Toast container (si no existe en layout) --}}
+<div id="rfCajaToast"
+     class="fixed bottom-5 right-5 z-50 pointer-events-none opacity-0 translate-y-2 transition duration-200 ease-out">
+    <div class="pointer-events-auto rounded-2xl border border-emerald-200 bg-white shadow-lg px-4 py-3 flex items-start gap-3">
+        <div class="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+            ✅
+        </div>
+        <div class="min-w-0">
+            <div class="font-extrabold text-slate-900" id="rfCajaToastTitle">Listo</div>
+            <div class="text-sm text-slate-600" id="rfCajaToastMsg">Impreso.</div>
+        </div>
+        <button type="button" id="rfCajaToastClose" class="ml-2 text-slate-400 hover:text-slate-700 font-bold">
+            ✕
+        </button>
     </div>
 </div>
 
@@ -449,55 +466,117 @@
     const subtotalBase = Number(@json((float)$subtotal));
     const hayCaja = Boolean(@json($hayCaja));
 
+    // Toast functions
+    const toast = document.getElementById('rfCajaToast');
+    const toastTitle = document.getElementById('rfCajaToastTitle');
+    const toastMsg = document.getElementById('rfCajaToastMsg');
+    const toastClose = document.getElementById('rfCajaToastClose');
+    let toastTimer = null;
+
+    function showToast(title, msg) {
+        if (!toast) return;
+        toastTitle.textContent = title || 'Listo';
+        toastMsg.textContent = msg || '';
+        toast.classList.remove('opacity-0', 'translate-y-2');
+        toast.classList.add('opacity-100', 'translate-y-0');
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(hideToast, 2600);
+    }
+
+    function hideToast() {
+        if (!toast) return;
+        toast.classList.add('opacity-0', 'translate-y-2');
+        toast.classList.remove('opacity-100', 'translate-y-0');
+    }
+
+    toastClose?.addEventListener('click', hideToast);
+
+    // Notificaciones de impresión
+    window.notifyPreticket = function(comandaId) {
+        showToast('Pre-ticket impreso', 'Comanda #' + comandaId + ' enviada a impresión.');
+    };
+
+    window.notifyFinal = function(ventaId) {
+        showToast('Ticket final impreso', 'Venta #' + ventaId + ' enviada a impresión.');
+    };
+
+    window.notifyTurno = function(turnoId) {
+        showToast('Cierre de turno impreso', 'Turno #' + turnoId + ' enviado a impresión.');
+    };
+
+    // Escuchar mensajes de la ventana de impresión
+    window.addEventListener('message', function(ev) {
+        const data = ev.data || {};
+        if (data.type !== 'RF_PRINT_DONE') return;
+
+        console.log('Mensaje recibido:', data);
+
+        if (data.mode === 'preticket' && data.comanda_id) {
+            window.notifyPreticket(parseInt(data.comanda_id, 10));
+        }
+
+        if (data.mode === 'final' && data.venta_id) {
+            window.notifyFinal(parseInt(data.venta_id, 10));
+        }
+
+        if (data.mode === 'turno' && data.turno_id) {
+            window.notifyTurno(parseInt(data.turno_id, 10));
+        }
+    });
+
     function toNumber(v) {
         const n = parseFloat(String(v ?? '').replace(',', '.'));
         return isNaN(n) ? 0 : n;
     }
 
     function moneyAr(n) {
-        return '$ ' + (Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+        return '$ ' + (Number(n).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }));
     }
 
     let pagoIndex = 0;
 
     function pagoRowHtml(idx, tipo = 'efectivo', monto = '', ref = '') {
         return `
-        <div class="pago-row rounded-xl border border-slate-200 bg-white p-3" data-idx="${idx}">
-            <div class="grid grid-cols-12 gap-2 items-end">
-                <div class="col-span-12 sm:col-span-4">
-                    <label class="block text-xs font-semibold text-slate-700">Tipo</label>
-                    <select name="pagos[${idx}][tipo]" class="mt-1 w-full rounded-xl border-slate-200">
+        <div class="pago-row rounded-lg p-2" data-idx="${idx}" style="background: #F8FAFC; border: 1px solid #E2E8F0;">
+            <div class="grid grid-cols-12 gap-2">
+                <div class="col-span-4">
+                    <select name="pagos[${idx}][tipo]" class="w-full px-2 py-1.5 rounded-lg text-xs" style="border: 1px solid #E2E8F0; background: white;">
                         <option value="efectivo" ${tipo === 'efectivo' ? 'selected' : ''}>Efectivo</option>
                         <option value="debito" ${tipo === 'debito' ? 'selected' : ''}>Débito</option>
                         <option value="transferencia" ${tipo === 'transferencia' ? 'selected' : ''}>Transferencia</option>
                     </select>
                 </div>
-
-                <div class="col-span-12 sm:col-span-4">
-                    <label class="block text-xs font-semibold text-slate-700">Monto</label>
-                    <input type="number" step="0.01" min="0.01"
-                           name="pagos[${idx}][monto]"
-                           class="pago-monto mt-1 w-full rounded-xl border-slate-200"
-                           placeholder="0,00"
-                           value="${monto}"
-                           oninput="recalcTotales()"
-                           required>
+                <div class="col-span-3">
+                    <div class="relative">
+                        <span class="absolute left-2 top-1/2 -translate-y-1/2 text-xs" style="color: #94A3B8;">$</span>
+                        <input type="number" step="0.01" min="0.01"
+                               name="pagos[${idx}][monto]"
+                               class="pago-monto w-full pl-6 pr-2 py-1.5 rounded-lg text-xs"
+                               style="border: 1px solid #E2E8F0; background: white;"
+                               placeholder="0"
+                               value="${monto}"
+                               oninput="recalcTotales()"
+                               required>
+                    </div>
                 </div>
-
-                <div class="col-span-10 sm:col-span-3">
-                    <label class="block text-xs font-semibold text-slate-700">Referencia</label>
+                <div class="col-span-4">
                     <input type="text" maxlength="120"
                            name="pagos[${idx}][referencia]"
-                           class="mt-1 w-full rounded-xl border-slate-200"
-                           placeholder="N° op / alias / etc"
+                           class="w-full px-2 py-1.5 rounded-lg text-xs"
+                           style="border: 1px solid #E2E8F0; background: white;"
+                           placeholder="Referencia"
                            value="${ref}">
                 </div>
-
-                <div class="col-span-2 sm:col-span-1">
+                <div class="col-span-1">
                     <button type="button"
-                            class="w-full rounded-xl px-3 py-2 font-extrabold border border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+                            class="w-full p-1.5 rounded-lg text-xs font-medium"
+                            style="background: #FEF2F2; color: #DC2626;"
                             title="Quitar"
-                            data-remove-pago="${idx}">✕</button>
+                            data-remove-pago="${idx}">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                        </svg>
+                    </button>
                 </div>
             </div>
         </div>
@@ -509,7 +588,6 @@
         const recargo   = toNumber(document.querySelector('input[name="recargo"]')?.value);
         const propina   = toNumber(document.querySelector('input[name="propina"]')?.value);
 
-        // ✅ la propina NO integra el total de la cuenta
         const total = Math.max(0, subtotalBase - descuento + recargo);
         window.__totalCobrar = total;
         window.__propina = propina;
@@ -620,6 +698,7 @@
         }
     });
 
+    // Código del modal de items
     (function(){
         function qs(id){ return document.getElementById(id); }
 
@@ -635,7 +714,7 @@
         let idx = 0;
 
         function renderEmpty(){
-            lines.innerHTML = `<div class="text-sm" style="color: var(--rf-text-light);">No hay líneas todavía.</div>`;
+            lines.innerHTML = `<div class="text-xs text-center py-4" style="color: #94A3B8;">No hay líneas todavía.</div>`;
         }
 
         function modalBodyEl(){
@@ -674,18 +753,18 @@
             }
 
             const row = document.createElement('div');
-            row.className = "rounded-xl border p-3 bg-white";
-            row.style.borderColor = "var(--rf-border)";
+            row.className = "rounded-lg p-2";
+            row.style.background = "white";
+            row.style.border = "1px solid #E2E8F0";
 
             row.innerHTML = `
                 <div class="flex items-start justify-between gap-3">
-                    <div class="min-w-0">
-                        <div class="font-semibold truncate" style="color: var(--rf-text);">${escapeHtml(label)}</div>
-                        ${notaVal ? `<div class="text-xs mt-1" style="color: var(--rf-text-light);">Nota: ${escapeHtml(notaVal)}</div>` : ``}
+                    <div class="min-w-0 flex-1">
+                        <div class="font-medium text-sm" style="color: #0F172A;">${escapeHtml(label)}</div>
+                        ${notaVal ? `<div class="text-xs mt-1" style="color: #64748B;">📝 ${escapeHtml(notaVal)}</div>` : ``}
                     </div>
                     <div class="shrink-0 text-right">
-                        <div class="text-xs" style="color: var(--rf-text-light);">Cant.</div>
-                        <div class="font-bold" style="color: var(--rf-text);">${cantidad}</div>
+                        <div class="text-xs" style="color: #64748B;">Cant. ${cantidad}</div>
                     </div>
                 </div>
 
@@ -693,10 +772,13 @@
                 <input type="hidden" name="items[${idx}][cantidad]" value="${cantidad}">
                 <input type="hidden" name="items[${idx}][nota]" value="${escapeAttr(notaVal)}">
 
-                <div class="mt-3 flex justify-end">
-                    <button type="button" class="px-3 py-2 rounded-xl text-xs font-semibold border"
-                        style="border-color: var(--rf-border); color: var(--rf-error);"
+                <div class="mt-2 flex justify-end">
+                    <button type="button" class="text-xs px-2 py-1 rounded-lg flex items-center gap-1"
+                        style="color: #DC2626;"
                         data-remove-line="1">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                        </svg>
                         Quitar
                     </button>
                 </div>
@@ -718,7 +800,7 @@
         lines.addEventListener('click', function(e){
             const rm = e.target.closest('[data-remove-line="1"]');
             if (!rm) return;
-            const row = rm.closest('div.rounded-xl');
+            const row = rm.closest('div.rounded-lg');
             if (row) row.remove();
             if (!lines.children.length) renderEmpty();
         });

@@ -131,6 +131,10 @@ Route::middleware(['auth'])->group(function () {
 
             Route::get('/caja/comandas/{comanda}', [CajaController::class, 'show'])->name('caja.show');
             Route::get('/caja/comandas/{comanda}/cuenta', [CajaController::class, 'cuenta'])->name('caja.cuenta');
+            
+            // ✅ NUEVA RUTA: Impresión directa del preticket
+            Route::get('/caja/comandas/{comanda}/print', [CajaController::class, 'printPreticket'])->name('caja.cuenta.print');
+            
             Route::post('/caja/comandas/{comanda}/cobrar', [CajaController::class, 'cobrar'])->name('caja.cobrar');
 
             // Admin puede agregar / quitar items con cuenta solicitada
@@ -151,7 +155,7 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/caja/turno/cerrar', [CajaTurnoController::class, 'cerrar'])
                 ->name('caja.turno.cerrar');
 
-            // ✅ NUEVA: ticket del cierre de turno
+            // ✅ Ticket del cierre de turno
             Route::get('/caja/turnos/{caja}/ticket', [CajaTurnoController::class, 'ticket'])
                 ->name('caja.turno.ticket');
 
