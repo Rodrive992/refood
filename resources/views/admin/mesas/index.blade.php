@@ -1,6 +1,6 @@
 <x-app-layout>
     <x-slot name="header">
-        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
                 <h2 class="text-xl font-bold text-gray-900">Mesas</h2>
                 <p class="text-sm text-gray-600">
@@ -8,10 +8,17 @@
                 </p>
             </div>
 
-            <div class="flex items-center gap-2">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+                {{-- Acceso al mapa --}}
+                <a href="{{ route('admin.mesas.mapa.index') }}"
+                    class="inline-flex items-center justify-center rounded-xl border border-orange-200 bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-700 hover:bg-orange-100">
+                    Ver mapa del local
+                </a>
+
                 {{-- Filtro estado --}}
                 <form method="GET" action="{{ route('admin.mesas.index') }}" class="flex items-center gap-2">
                     <input type="hidden" name="id_local" value="{{ $idLocal }}">
+
                     <select name="estado"
                         class="rounded-xl border-gray-200 text-sm focus:border-orange-400 focus:ring-orange-400">
                         <option value="">Todos</option>
@@ -39,7 +46,7 @@
                 <button
                     x-data
                     @click="$dispatch('open-modal', 'modal-crear-mesa')"
-                    class="inline-flex items-center rounded-xl bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">
+                    class="inline-flex items-center justify-center rounded-xl bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">
                     + Nueva mesa
                 </button>
             </div>
@@ -55,9 +62,10 @@
                     {{ session('success') }}
                 </div>
             @endif
+
             @if ($errors->any())
                 <div class="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-red-800">
-                    <div class="font-semibold mb-1">Revisá estos errores:</div>
+                    <div class="mb-1 font-semibold">Revisá estos errores:</div>
                     <ul class="list-disc pl-5 text-sm">
                         @foreach ($errors->all() as $error)
                             <li>{{ $error }}</li>
@@ -79,14 +87,17 @@
                     <div class="text-xs text-gray-500">Libres</div>
                     <div class="text-2xl font-extrabold text-green-700">{{ $countLibre }}</div>
                 </div>
+
                 <div class="rounded-2xl border border-gray-200 bg-white p-4">
                     <div class="text-xs text-gray-500">Ocupadas</div>
                     <div class="text-2xl font-extrabold text-red-700">{{ $countOcupada }}</div>
                 </div>
+
                 <div class="rounded-2xl border border-gray-200 bg-white p-4">
                     <div class="text-xs text-gray-500">Reservadas</div>
                     <div class="text-2xl font-extrabold text-amber-700">{{ $countReservada }}</div>
                 </div>
+
                 <div class="rounded-2xl border border-gray-200 bg-white p-4">
                     <div class="text-xs text-gray-500">Fuera de servicio</div>
                     <div class="text-2xl font-extrabold text-gray-700">{{ $countFuera }}</div>
@@ -132,13 +143,13 @@
                         }
                     @endphp
 
-                    <article class="rounded-3xl {{ $bg }} {{ $ring }} overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                    <article class="overflow-hidden rounded-3xl {{ $bg }} {{ $ring }} shadow-sm transition-shadow hover:shadow-md">
                         <div class="p-4">
                             <div class="flex items-start justify-between gap-3">
                                 <div>
                                     <div class="flex items-center gap-2">
                                         <span class="inline-flex h-2.5 w-2.5 rounded-full {{ $dot }}"></span>
-                                        <h3 class="text-lg font-extrabold text-gray-900 leading-tight">
+                                        <h3 class="text-lg font-extrabold leading-tight text-gray-900">
                                             {{ $mesa->nombre }}
                                         </h3>
                                     </div>
@@ -147,12 +158,24 @@
                                         <span class="inline-flex items-center rounded-xl px-2.5 py-1 text-xs font-bold {{ $badgeBg }} {{ $badgeText }}">
                                             {{ ucfirst(str_replace('_', ' ', $mesa->estado)) }}
                                         </span>
+
                                         <span class="inline-flex items-center rounded-xl bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700">
                                             Cap: {{ $mesa->capacidad }}
                                         </span>
+
                                         <span class="inline-flex items-center rounded-xl bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700">
                                             ID: {{ $mesa->id }}
                                         </span>
+
+                                        @if (!is_null($mesa->pos_x) && !is_null($mesa->pos_y))
+                                            <span class="inline-flex items-center rounded-xl bg-orange-100 px-2.5 py-1 text-xs font-semibold text-orange-700">
+                                                Mapa: {{ $mesa->pos_x }},{{ $mesa->pos_y }}
+                                            </span>
+                                        @else
+                                            <span class="inline-flex items-center rounded-xl bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                                                Sin ubicar
+                                            </span>
+                                        @endif
                                     </div>
                                 </div>
 
@@ -173,9 +196,9 @@
                             </div>
 
                             {{-- Observación --}}
-                            <div class="mt-3 min-h-[44px] rounded-2xl bg-white/70 border border-gray-200 px-3 py-2">
-                                <div class="text-xs font-semibold text-gray-500 mb-0.5">Observación</div>
-                                <div class="text-sm text-gray-800 line-clamp-2">
+                            <div class="mt-3 min-h-[44px] rounded-2xl border border-gray-200 bg-white/70 px-3 py-2">
+                                <div class="mb-0.5 text-xs font-semibold text-gray-500">Observación</div>
+                                <div class="line-clamp-2 text-sm text-gray-800">
                                     {{ $mesa->observacion ?: '—' }}
                                 </div>
                             </div>
@@ -191,8 +214,7 @@
                                         nombre: @js($mesa->nombre),
                                         observacion: @js($mesa->observacion)
                                     })"
-                                    class="w-full rounded-2xl bg-amber-500 px-3 py-2 text-sm font-bold text-white hover:bg-amber-600"
-                                >
+                                    class="w-full rounded-2xl bg-amber-500 px-3 py-2 text-sm font-bold text-white hover:bg-amber-600">
                                     Reservar
                                 </button>
 
@@ -205,6 +227,14 @@
                                         Liberar
                                     </button>
                                 </form>
+                            </div>
+
+                            {{-- Acceso rápido al mapa --}}
+                            <div class="mt-2">
+                                <a href="{{ route('admin.mesas.mapa.index') }}"
+                                    class="inline-flex w-full items-center justify-center rounded-2xl border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-semibold text-orange-700 hover:bg-orange-100">
+                                    Ir al mapa para ubicar
+                                </a>
                             </div>
 
                             {{-- Zona de peligro (compacta) --}}
@@ -232,7 +262,6 @@
                     </div>
                 @endforelse
             </div>
-
         </div>
     </div>
 
@@ -268,27 +297,28 @@
         x-cloak
         class="fixed inset-0 z-50 flex items-center justify-center px-4"
     >
-        <div class="absolute inset-0 bg-black/40" @click="open=false"></div>
+        <div class="absolute inset-0 bg-black/40" @click="open = false"></div>
 
-        <div class="relative w-full max-w-lg rounded-3xl bg-white shadow-xl border border-gray-200 overflow-hidden">
-            <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+        <div class="relative w-full max-w-lg overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-xl">
+            <div class="flex items-center justify-between border-b border-gray-200 px-5 py-4">
                 <div>
                     <h3 class="text-lg font-extrabold text-gray-900">Reservar mesa</h3>
                     <p class="text-sm text-gray-600" x-text="mesaNombre + ' · ID #' + mesaId"></p>
                 </div>
-                <button @click="open=false"
+
+                <button @click="open = false"
                     class="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold hover:bg-gray-50">
                     Cerrar
                 </button>
             </div>
 
-            <form method="POST" :action="actionUrl" class="p-5 space-y-4">
+            <form method="POST" :action="actionUrl" class="space-y-4 p-5">
                 @csrf
                 @method('PATCH')
                 <input type="hidden" name="estado" value="reservada">
 
                 <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-1">
+                    <label class="mb-1 block text-sm font-semibold text-gray-700">
                         Observación (ej: “20:30 - Cumple de Ana”)
                     </label>
                     <input
@@ -305,7 +335,7 @@
                 </div>
 
                 <div class="flex items-center justify-end gap-2 pt-2">
-                    <button type="button" @click="open=false"
+                    <button type="button" @click="open = false"
                         class="rounded-2xl border border-gray-200 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50">
                         Cancelar
                     </button>
@@ -329,41 +359,43 @@
         x-cloak
         class="fixed inset-0 z-50 flex items-center justify-center px-4"
     >
-        <div class="absolute inset-0 bg-black/40" @click="open=false"></div>
+        <div class="absolute inset-0 bg-black/40" @click="open = false"></div>
 
-        <div class="relative w-full max-w-lg rounded-3xl bg-white shadow-xl border border-gray-200 overflow-hidden">
-            <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+        <div class="relative w-full max-w-lg overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-xl">
+            <div class="flex items-center justify-between border-b border-gray-200 px-5 py-4">
                 <div>
                     <h3 class="text-lg font-extrabold text-gray-900">Nueva mesa</h3>
                     <p class="text-sm text-gray-600">Se crea en el local #{{ $idLocal }}</p>
                 </div>
-                <button @click="open=false" class="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold hover:bg-gray-50">
+
+                <button @click="open = false"
+                    class="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold hover:bg-gray-50">
                     Cerrar
                 </button>
             </div>
 
-            <form method="POST" action="{{ route('admin.mesas.store') }}" class="p-5 space-y-4">
+            <form method="POST" action="{{ route('admin.mesas.store') }}" class="space-y-4 p-5">
                 @csrf
                 <input type="hidden" name="id_local" value="{{ $idLocal }}">
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-1">Nombre</label>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Nombre</label>
                         <input type="text" name="nombre" value="{{ old('nombre') }}"
                             placeholder="Mesa 11"
                             class="w-full rounded-2xl border-gray-200 focus:border-orange-400 focus:ring-orange-400">
                     </div>
 
                     <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-1">Capacidad</label>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Capacidad</label>
                         <input type="number" name="capacidad" min="1" max="50" value="{{ old('capacidad', 4) }}"
                             class="w-full rounded-2xl border-gray-200 focus:border-orange-400 focus:ring-orange-400">
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-1">Estado</label>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Estado</label>
                         <select name="estado" class="w-full rounded-2xl border-gray-200 focus:border-orange-400 focus:ring-orange-400">
                             @foreach ($estados as $e)
                                 <option value="{{ $e }}" @selected(old('estado', 'libre') === $e)>
@@ -373,8 +405,8 @@
                         </select>
                     </div>
 
-                    <div class="sm:col-span-1">
-                        <label class="block text-sm font-semibold text-gray-700 mb-1">Observación</label>
+                    <div>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Observación</label>
                         <input type="text" name="observacion" value="{{ old('observacion') }}"
                             placeholder="Opcional"
                             class="w-full rounded-2xl border-gray-200 focus:border-orange-400 focus:ring-orange-400">
@@ -382,10 +414,11 @@
                 </div>
 
                 <div class="flex items-center justify-end gap-2 pt-2">
-                    <button type="button" @click="open=false"
+                    <button type="button" @click="open = false"
                         class="rounded-2xl border border-gray-200 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50">
                         Cancelar
                     </button>
+
                     <button type="submit"
                         class="rounded-2xl bg-orange-600 px-4 py-2 text-sm font-bold text-white hover:bg-orange-700">
                         Guardar
@@ -424,40 +457,42 @@
         x-cloak
         class="fixed inset-0 z-50 flex items-center justify-center px-4"
     >
-        <div class="absolute inset-0 bg-black/40" @click="open=false"></div>
+        <div class="absolute inset-0 bg-black/40" @click="open = false"></div>
 
-        <div class="relative w-full max-w-lg rounded-3xl bg-white shadow-xl border border-gray-200 overflow-hidden">
-            <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+        <div class="relative w-full max-w-lg overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-xl">
+            <div class="flex items-center justify-between border-b border-gray-200 px-5 py-4">
                 <div>
                     <h3 class="text-lg font-extrabold text-gray-900">Editar mesa</h3>
                     <p class="text-sm text-gray-600" x-text="'ID #' + mesaId"></p>
                 </div>
-                <button @click="open=false" class="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold hover:bg-gray-50">
+
+                <button @click="open = false"
+                    class="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold hover:bg-gray-50">
                     Cerrar
                 </button>
             </div>
 
-            <form method="POST" :action="actionUrl" class="p-5 space-y-4">
+            <form method="POST" :action="actionUrl" class="space-y-4 p-5">
                 @csrf
                 @method('PUT')
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-1">Nombre</label>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Nombre</label>
                         <input type="text" name="nombre" x-model="nombre"
                             class="w-full rounded-2xl border-gray-200 focus:border-orange-400 focus:ring-orange-400">
                     </div>
 
                     <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-1">Capacidad</label>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Capacidad</label>
                         <input type="number" name="capacidad" min="1" max="50" x-model="capacidad"
                             class="w-full rounded-2xl border-gray-200 focus:border-orange-400 focus:ring-orange-400">
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-1">Estado</label>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Estado</label>
                         <select name="estado" x-model="estado"
                             class="w-full rounded-2xl border-gray-200 focus:border-orange-400 focus:ring-orange-400">
                             @foreach ($estados as $e)
@@ -467,7 +502,7 @@
                     </div>
 
                     <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-1">Observación</label>
+                        <label class="mb-1 block text-sm font-semibold text-gray-700">Observación</label>
                         <input type="text" name="observacion" x-model="observacion"
                             class="w-full rounded-2xl border-gray-200 focus:border-orange-400 focus:ring-orange-400"
                             placeholder="Opcional">
@@ -475,7 +510,7 @@
                 </div>
 
                 <div class="flex items-center justify-between gap-2 pt-2">
-                    <button type="button" @click="open=false"
+                    <button type="button" @click="open = false"
                         class="rounded-2xl border border-gray-200 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50">
                         Cancelar
                     </button>
@@ -488,5 +523,4 @@
             </form>
         </div>
     </div>
-
-</x-app-layout>x    
+</x-app-layout>

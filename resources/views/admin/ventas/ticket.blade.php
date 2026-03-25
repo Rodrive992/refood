@@ -143,28 +143,60 @@
                 }
             } catch (e) {}
 
+            let printed = false;
             let notified = false;
 
-            function notifyParent(){
+            function notifyParent() {
                 if (notified) return;
                 notified = true;
 
                 try {
-                    if (window.parent) {
+                    if (window.parent && window.parent !== window) {
                         window.parent.postMessage({
                             type: 'RF_PRINT_DONE',
                             mode: 'final',
                             venta_id: {{ (int)$venta->id }}
                         }, '*');
                     }
-                } catch(e){}
+                } catch (e) {
+                    console.log('Error notificando final:', e);
+                }
             }
 
-            window.addEventListener('afterprint', function(){
+            function doPrint() {
+                if (printed) return;
+                printed = true;
+
+                setTimeout(function() {
+                    try {
+                        window.focus();
+                        window.print();
+                    } catch (e) {
+                        console.log('Error al imprimir ticket final:', e);
+                        notifyParent();
+                    }
+                }, 150);
+            }
+
+            window.addEventListener('afterprint', function() {
                 notifyParent();
             });
 
-            setTimeout(notifyParent, 3000);
+            window.addEventListener('load', function() {
+                doPrint();
+
+                setTimeout(function() {
+                    notifyParent();
+                }, 3000);
+            });
+
+            if (document.readyState === 'complete') {
+                doPrint();
+
+                setTimeout(function() {
+                    notifyParent();
+                }, 3000);
+            }
         })();
     </script>
 </body>

@@ -19,6 +19,11 @@
 
     $subtotalNumero = (float)($subtotal ?? 0);
     $subtotalFmt = number_format($subtotalNumero, 0, '.', '.');
+
+    $preticketPendiente = $hasComanda && (int)($comanda->preticket_pendiente ?? 0) === 1;
+    $preticketImpresoAt = !empty($comanda?->preticket_impreso_at)
+        ? \Carbon\Carbon::parse($comanda->preticket_impreso_at)->format('H:i')
+        : null;
 @endphp
 
 <div class="bg-white rounded-2xl border shadow-sm overflow-hidden"
@@ -85,7 +90,7 @@
                         Subtotal estimado
                     </div>
                     <div class="text-2xl font-extrabold" style="color: var(--rf-text);">
-                        {{ $subtotalFmt }}
+                        ${{ $subtotalFmt }}
                     </div>
                 </div>
 
@@ -143,9 +148,36 @@
                                 Cuenta ya solicitada
                             </button>
 
+                            @if($preticketPendiente)
+                                <button type="button" disabled
+                                        class="w-full px-4 py-3 rounded-2xl text-sm font-extrabold border"
+                                        style="border-color: var(--rf-primary); background: rgba(249,115,22,0.10); color: var(--rf-primary);">
+                                    Preticket enviado a caja
+                                </button>
+                            @else
+                                <form method="POST"
+                                      action="{{ route('mozo.comandas.pedirPreticket', $comanda) }}"
+                                      class="w-full">
+                                    @csrf
+                                    <button type="submit"
+                                            class="w-full px-4 py-3 rounded-2xl text-sm font-extrabold rf-hover-lift border"
+                                            style="border-color: var(--rf-primary); background: white; color: var(--rf-primary);">
+                                        Imprimir preticket en caja
+                                    </button>
+                                </form>
+                            @endif
+
                             <div class="rounded-2xl border p-4 text-sm"
                                  style="border-color: var(--rf-border); background: var(--rf-bg); color: var(--rf-text-light);">
                                 La cuenta ya fue enviada a caja. Hasta que caja cierre la comanda, no se pueden agregar/editar items.
+                                <br>
+                                @if($preticketPendiente)
+                                    El preticket fue solicitado y está pendiente de impresión en caja.
+                                @elseif($preticketImpresoAt)
+                                    Última impresión de preticket registrada a las {{ $preticketImpresoAt }}.
+                                @else
+                                    Podés pedir el preticket para que se imprima en la computadora de caja conectada a la impresora.
+                                @endif
                             </div>
                         @else
                             <button type="button"

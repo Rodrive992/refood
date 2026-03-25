@@ -218,7 +218,7 @@ class ComandaController extends Controller
 
             $ids = collect($validated['items'])
                 ->pluck('id_item')
-                ->map(fn ($v) => (int) $v)
+                ->map(fn($v) => (int) $v)
                 ->unique()
                 ->values();
 
@@ -282,7 +282,7 @@ class ComandaController extends Controller
 
             $ids = collect($validated['items'])
                 ->pluck('id_item')
-                ->map(fn ($v) => (int) $v)
+                ->map(fn($v) => (int) $v)
                 ->unique()
                 ->values();
 
@@ -361,6 +361,74 @@ class ComandaController extends Controller
         });
 
         return back()->with('ok', 'Cuenta solicitada a caja.');
+    }
+
+    public function pedirPreticket(Comanda $comanda)
+    {
+        $this->assertComandaLocal($comanda);
+
+        DB::transaction(function () use ($comanda) {
+            $comanda = Comanda::query()
+                ->where('id', $comanda->id)
+                ->where('id_local', $this->localId())
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            abort_if(
+                in_array($comanda->estado, ['cerrada', 'anulada'], true),
+                422,
+                'La comanda ya está cerrada o anulada.'
+            );
+
+            abort_if(
+                empty($comanda->id_mesa),
+                422,
+                'La comanda no tiene mesa asociada.'
+            );
+
+            $mesa = Mesa::query()
+                ->where('id', $comanda->id_mesa)
+                ->where('id_local', $this->localId())
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            abort_if(
+                in_array($mesa->estado, ['inactiva', 'fuera_servicio'], true),
+                422,
+                'La mesa no está disponible.'
+            );
+
+            abort_if(
+                $mesa->estado === 'libre',
+                422,
+                'La mesa está libre.'
+            );
+
+            abort_if(
+                (int) ($mesa->atendida_por ?? 0) !== $this->mozoId(),
+                403,
+                'Esta mesa está siendo atendida por otro mozo.'
+            );
+
+            abort_if(
+                (int)($comanda->cuenta_solicitada ?? 0) !== 1,
+                422,
+                'Primero tenés que solicitar la cuenta.'
+            );
+
+            if ((int)($comanda->preticket_pendiente ?? 0) === 1) {
+                return;
+            }
+
+            $comanda->update([
+                'preticket_pendiente'      => 1,
+                'preticket_solicitado_at'  => now(),
+                'preticket_solicitado_por' => auth()->id(),
+                'preticket_impreso_at'     => null,
+            ]);
+        });
+
+        return back()->with('ok', 'Preticket enviado a caja para impresión.');
     }
 
     public function updateItem(Request $request, ComandaItem $comandaItem)

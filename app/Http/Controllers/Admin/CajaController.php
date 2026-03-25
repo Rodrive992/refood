@@ -183,7 +183,6 @@ class CajaController extends Controller
         ]);
 
         DB::transaction(function () use ($data, $comanda, $localId) {
-
             $ids = collect($data['items'])
                 ->pluck('id_item')
                 ->map(fn($v) => (int)$v)
@@ -303,7 +302,6 @@ class CajaController extends Controller
         }
 
         return DB::transaction(function () use ($comanda, $data, $pagos, $localId) {
-
             $caja = Caja::query()
                 ->where('id_local', $localId)
                 ->where('estado', 'abierta')
@@ -473,12 +471,53 @@ class CajaController extends Controller
         ]);
     }
 
-    /**
-     * Print preticket directly (for iframe printing).
-     * 
-     * @param Comanda $comanda
-     * @return \Illuminate\View\View
-     */
+    public function preticketsPoll(Request $request)
+    {
+        $localId = $this->localId();
+
+        $pendientes = Comanda::query()
+            ->where('id_local', $localId)
+            ->where('cuenta_solicitada', 1)
+            ->where('preticket_pendiente', 1)
+            ->whereNotIn('estado', ['cerrada', 'anulada'])
+            ->with(['mesa', 'mozo'])
+            ->orderBy('preticket_solicitado_at')
+            ->get();
+
+        $jobs = $pendientes->map(function ($comanda) {
+            return [
+                'id' => (int) $comanda->id,
+                'mesa' => $comanda->mesa->nombre ?? 'Sin mesa',
+                'mozo' => $comanda->mozo->name ?? ('#' . $comanda->id_mozo),
+                'print_url' => route('admin.caja.cuenta.print', $comanda),
+                'solicitado_at' => optional($comanda->preticket_solicitado_at)?->toISOString(),
+            ];
+        })->values();
+
+        return response()->json([
+            'ok' => true,
+            'jobs' => $jobs,
+            'count' => $jobs->count(),
+            'ts' => now()->toISOString(),
+        ]);
+    }
+
+    public function markPreticketPrinted(Comanda $comanda)
+    {
+        $localId = $this->localId();
+        abort_unless((int) $comanda->id_local === $localId, 403);
+
+        $comanda->update([
+            'preticket_pendiente' => 0,
+            'preticket_impreso_at' => now('America/Argentina/Buenos_Aires'),
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Preticket marcado como impreso.',
+        ]);
+    }
+
     public function printPreticket(Comanda $comanda)
     {
         $localId = $this->localId();

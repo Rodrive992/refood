@@ -12,7 +12,7 @@
             <span class="px-3 py-1 rounded-full text-xs font-medium" style="background: #F1F5F9; color: #475569;">
                 {{ now()->format('d/m/Y H:i') }}
             </span>
-            
+
             <div class="flex items-center gap-2 text-xs">
                 <div class="flex items-center gap-1.5 px-3 py-1 rounded-full" style="background: #F8FAFC; border: 1px solid #E2E8F0;">
                     <span class="relative flex h-2 w-2">
@@ -89,9 +89,7 @@
     {{-- Turno compacto --}}
     <div class="rounded-xl mb-6 p-4" style="background: white; border: 1px solid #E2E8F0;">
         @if ($cajaAbierta)
-            {{-- Turno activo --}}
             <div class="flex flex-col lg:flex-row lg:items-center gap-4">
-                {{-- Info turno --}}
                 <div class="flex items-center gap-4 flex-wrap">
                     <div class="flex items-center gap-2">
                         <span class="relative flex h-2.5 w-2.5">
@@ -100,7 +98,7 @@
                         </span>
                         <span class="text-xs font-medium uppercase tracking-wider" style="color: #64748B;">Turno #{{ $cajaAbierta->turno }}</span>
                     </div>
-                    
+
                     <div class="flex items-center gap-3 text-sm">
                         <span style="color: #475569;">Apertura: <strong style="color: #0F172A;">${{ number_format((float) $cajaAbierta->efectivo_apertura, 0, ',', '.') }}</strong></span>
                         <span style="color: #475569;">Ingresos: <strong class="text-emerald-600">${{ number_format((float) $cajaAbierta->ingreso_efectivo, 0, ',', '.') }}</strong></span>
@@ -110,9 +108,7 @@
                     </div>
                 </div>
 
-                {{-- Acciones turno --}}
                 <div class="flex items-center gap-2 ml-auto">
-                    {{-- Movimiento rápido --}}
                     <form method="POST" action="{{ route('admin.caja.turno.movimiento') }}" class="flex items-center gap-2">
                         @csrf
                         <select name="tipo" class="h-9 rounded-lg text-xs px-2" style="border: 1px solid #E2E8F0; background: white;">
@@ -131,7 +127,6 @@
                         </button>
                     </form>
 
-                    {{-- Cierre turno --}}
                     <form method="POST" action="{{ route('admin.caja.turno.cerrar') }}" class="flex items-center gap-2">
                         @csrf
                         <input type="text" name="observacion" placeholder="Obs. cierre"
@@ -143,13 +138,12 @@
                 </div>
             </div>
         @else
-            {{-- Sin turno activo --}}
             <div class="flex flex-col sm:flex-row sm:items-center gap-4">
                 <div class="flex items-center gap-3">
                     <span class="w-2.5 h-2.5 rounded-full bg-slate-300"></span>
                     <span class="text-sm" style="color: #64748B;">No hay turno activo</span>
                 </div>
-                
+
                 <form method="POST" action="{{ route('admin.caja.turno.abrir') }}" class="flex items-center gap-2">
                     @csrf
                     <div class="relative">
@@ -169,7 +163,6 @@
 
     {{-- Grid principal --}}
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {{-- Mesas --}}
         <section class="lg:col-span-7 rounded-xl overflow-hidden" style="background: white; border: 1px solid #E2E8F0;">
             <div class="px-4 py-3 flex items-center justify-between" style="border-bottom: 1px solid #F1F5F9;">
                 <h2 class="font-bold" style="color: #0F172A;">Mesas</h2>
@@ -190,7 +183,6 @@
             </div>
         </section>
 
-        {{-- Pendientes --}}
         <aside class="lg:col-span-5 rounded-xl overflow-hidden" style="background: white; border: 1px solid #E2E8F0;">
             <div class="px-4 py-3 flex items-center justify-between" style="border-bottom: 1px solid #F1F5F9;">
                 <h2 class="font-bold" style="color: #0F172A;">Pendientes</h2>
@@ -212,7 +204,7 @@
     </div>
 </div>
 
-{{-- Scripts (exactamente igual, sin cambios) --}}
+{{-- Poll general --}}
 <script>
 (function() {
     const POLL_MS = 3000;
@@ -224,39 +216,10 @@
     const mesasWrap = document.getElementById('mesasWrap');
 
     const statusEl = document.getElementById('rfPendStatus');
-    const lastSyncEl = document.getElementById('rfPendLastSync');
     const toggleBtn = document.getElementById('rfPendToggleBtn');
-    const badge = document.getElementById('rfPendBadge');
 
     let enabled = true;
     let timer = null;
-
-    function getDomPendCount() {
-        const panel = document.getElementById('pendientesPanel');
-        const c = panel ? parseInt(panel.getAttribute('data-count') || '0', 10) : 0;
-        return isNaN(c) ? 0 : c;
-    }
-
-    let lastPendCount = getDomPendCount();
-
-    function nowStr() {
-        const d = new Date();
-        const hh = String(d.getHours()).padStart(2, '0');
-        const mm = String(d.getMinutes()).padStart(2, '0');
-        const ss = String(d.getSeconds()).padStart(2, '0');
-        return `${hh}:${mm}:${ss}`;
-    }
-
-    function setStatus() {
-        if (statusEl) statusEl.textContent = enabled ? 'ON' : 'OFF';
-        if (toggleBtn) toggleBtn.textContent = enabled ? 'Pausar' : 'Reanudar';
-    }
-
-    function showBadge() {
-        if (!badge) return;
-        badge.classList.remove('hidden');
-        setTimeout(() => badge.classList.add('hidden'), 4000);
-    }
 
     async function refreshPendientes() {
         try {
@@ -275,13 +238,6 @@
             if (typeof data.html === 'string' && pendientesWrap) {
                 pendientesWrap.innerHTML = data.html;
             }
-
-            const newCount = parseInt(data.count || 0, 10);
-            if (newCount > lastPendCount) {
-                showBadge();
-            }
-
-            lastPendCount = newCount;
         } catch (e) {}
     }
 
@@ -310,10 +266,11 @@
             refreshPendientes(),
             refreshMesas()
         ]);
+    }
 
-        if (lastSyncEl) {
-            lastSyncEl.textContent = nowStr();
-        }
+    function setStatus() {
+        if (statusEl) statusEl.textContent = enabled ? 'ON' : 'OFF';
+        if (toggleBtn) toggleBtn.textContent = enabled ? 'Pausar' : 'Reanudar';
     }
 
     function tick() {
@@ -337,17 +294,18 @@
         });
     }
 
+    window.__rfRefreshCaja = refreshAll;
+
     setStatus();
     start();
     refreshAll();
 })();
 </script>
 
-{{-- Toast + impresión (exactamente igual) --}}
+{{-- Toast + impresión --}}
 <div id="rfCajaToast"
     class="fixed bottom-5 right-5 z-50 pointer-events-none opacity-0 translate-y-2 transition duration-200 ease-out">
-    <div
-        class="pointer-events-auto rounded-2xl border border-emerald-200 bg-white shadow-lg px-4 py-3 flex items-start gap-3">
+    <div class="pointer-events-auto rounded-2xl border border-emerald-200 bg-white shadow-lg px-4 py-3 flex items-start gap-3">
         <div class="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
             ✅
         </div>
@@ -355,9 +313,7 @@
             <div class="font-extrabold text-slate-900" id="rfCajaToastTitle">Listo</div>
             <div class="text-sm text-slate-600" id="rfCajaToastMsg">Impreso.</div>
         </div>
-        <button type="button" id="rfCajaToastClose" class="ml-2 text-slate-400 hover:text-slate-700 font-bold">
-            ✕
-        </button>
+        <button type="button" id="rfCajaToastClose" class="ml-2 text-slate-400 hover:text-slate-700 font-bold">✕</button>
     </div>
 </div>
 
@@ -367,6 +323,8 @@
     const toastTitle = document.getElementById('rfCajaToastTitle');
     const toastMsg = document.getElementById('rfCajaToastMsg');
     const toastClose = document.getElementById('rfCajaToastClose');
+    const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
     let toastTimer = null;
 
     function showToast(title, msg) {
@@ -387,18 +345,32 @@
 
     toastClose?.addEventListener('click', hideToast);
 
-    let printFrame = document.getElementById('rfPrintFrame');
-    if (!printFrame) {
-        printFrame = document.createElement('iframe');
-        printFrame.id = 'rfPrintFrame';
-        printFrame.style.position = 'fixed';
-        printFrame.style.right = '0';
-        printFrame.style.bottom = '0';
-        printFrame.style.width = '0';
-        printFrame.style.height = '0';
-        printFrame.style.border = '0';
-        printFrame.style.opacity = '0';
-        document.body.appendChild(printFrame);
+    let preticketFrame = document.getElementById('rfPreticketFrame');
+    if (!preticketFrame) {
+        preticketFrame = document.createElement('iframe');
+        preticketFrame.id = 'rfPreticketFrame';
+        preticketFrame.style.position = 'fixed';
+        preticketFrame.style.right = '0';
+        preticketFrame.style.bottom = '0';
+        preticketFrame.style.width = '0';
+        preticketFrame.style.height = '0';
+        preticketFrame.style.border = '0';
+        preticketFrame.style.opacity = '0';
+        document.body.appendChild(preticketFrame);
+    }
+
+    let finalFrame = document.getElementById('rfFinalFrame');
+    if (!finalFrame) {
+        finalFrame = document.createElement('iframe');
+        finalFrame.id = 'rfFinalFrame';
+        finalFrame.style.position = 'fixed';
+        finalFrame.style.right = '0';
+        finalFrame.style.bottom = '0';
+        finalFrame.style.width = '0';
+        finalFrame.style.height = '0';
+        finalFrame.style.border = '0';
+        finalFrame.style.opacity = '0';
+        document.body.appendChild(finalFrame);
     }
 
     function printIframeWindow(frame, doneCb) {
@@ -407,11 +379,13 @@
         try {
             frame.contentWindow.focus();
             frame.contentWindow.print();
-        } catch (e) {}
+        } catch (e) {
+            console.warn('Error imprimiendo iframe:', e);
+        }
 
         if (typeof doneCb === 'function') {
-            setTimeout(doneCb, 900);
-            setTimeout(doneCb, 1800);
+            setTimeout(doneCb, 1200);
+            setTimeout(doneCb, 2200);
         }
     }
 
@@ -427,7 +401,7 @@
 
     function notifyPreticket(comandaId) {
         const key = 'preticket:' + comandaId;
-        if (!once(key)) return;
+        if (!once(key, 5000)) return;
         showToast('Pre-ticket impreso', 'Comanda #' + comandaId + ' enviada a impresión.');
     }
 
@@ -443,6 +417,81 @@
         showToast('Cierre de turno impreso', 'Turno #' + turnoId + ' enviado a impresión.');
     }
 
+    async function markPreticketPrinted(comandaId) {
+        try {
+            await fetch(`{{ url('/admin/caja/comandas') }}/${comandaId}/preticket-printed`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': csrf,
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json'
+                }
+            });
+        } catch (e) {
+            console.warn('No se pudo marcar preticket como impreso', e);
+        }
+    }
+
+    let preticketBusy = false;
+    let currentPreticketId = null;
+
+    function triggerPreticket(printUrl, comandaId, remote = false) {
+        if (!printUrl || !comandaId) return;
+        if (preticketBusy) return;
+
+        preticketBusy = true;
+        currentPreticketId = Number(comandaId);
+
+        preticketFrame.onload = function() {
+            preticketFrame.onload = null;
+
+            if (!remote) {
+                printIframeWindow(preticketFrame, async function() {
+                    notifyPreticket(currentPreticketId);
+
+                    preticketBusy = false;
+                    currentPreticketId = null;
+
+                    if (typeof window.__rfRefreshCaja === 'function') {
+                        window.__rfRefreshCaja();
+                    }
+                });
+            }
+        };
+
+        preticketFrame.src = `${printUrl}${printUrl.includes('?') ? '&' : '?'}t=${Date.now()}`;
+    }
+
+    async function pollPretickets() {
+        if (preticketBusy) return;
+
+        try {
+            const res = await fetch("{{ route('admin.caja.preticketsPoll') }}", {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json'
+                },
+                cache: 'no-store'
+            });
+
+            if (!res.ok) return;
+
+            const data = await res.json();
+            if (!data || !data.ok || !Array.isArray(data.jobs) || !data.jobs.length) return;
+
+            const job = data.jobs[0];
+            const comandaId = Number(job.id || 0);
+            const url = job.print_url || '';
+
+            if (!comandaId || !url) return;
+
+            const remoteUrl = `${url}${url.includes('?') ? '&' : '?'}autoprint=1`;
+            triggerPreticket(remoteUrl, comandaId, true);
+        } catch (e) {
+            console.warn('Error en pollPretickets:', e);
+        }
+    }
+
     document.addEventListener('click', function(e) {
         const a = e.target.closest('.js-print-preticket');
         if (!a) return;
@@ -455,54 +504,63 @@
         if (!url) return;
         if (comandaId && !once('click:preticket:' + comandaId, 800)) return;
 
-        printFrame.onload = function() {
-            printFrame.onload = null;
-            printIframeWindow(printFrame, function() {
-                notifyPreticket(comandaId);
-            });
-        };
-
-        printFrame.src = url;
+        triggerPreticket(url, comandaId, false);
     });
 
     const finalUrl = @json(session('rf_print_final_url'));
     const ventaId = Number(@json(session('rf_venta_id', 0)));
 
     if (finalUrl && ventaId) {
-        if (once('auto:final-load:' + ventaId, 8000)) {
-            printFrame.onload = function() {
-                printFrame.onload = null;
-                printIframeWindow(printFrame, function() {
-                    notifyFinal(ventaId);
-                });
-            };
+        setTimeout(function() {
+            if (once('auto:final-load:' + ventaId, 8000)) {
+                finalFrame.onload = function() {
+                    finalFrame.onload = null;
+                    printIframeWindow(finalFrame, function() {
+                        notifyFinal(ventaId);
+                    });
+                };
 
-            printFrame.src = finalUrl;
-        }
+                finalFrame.src = `${finalUrl}${finalUrl.includes('?') ? '&' : '?'}t=${Date.now()}`;
+            }
+        }, 250);
     }
 
     const turnoUrl = @json(session('rf_print_turno_url'));
     const turnoId = Number(@json(session('rf_turno_id', 0)));
 
     if (turnoUrl && turnoId) {
-        if (once('auto:turno-load:' + turnoId, 8000)) {
-            printFrame.onload = function() {
-                printFrame.onload = null;
-                printIframeWindow(printFrame, function() {
-                    notifyTurno(turnoId);
-                });
-            };
+        setTimeout(function() {
+            if (once('auto:turno-load:' + turnoId, 8000)) {
+                finalFrame.onload = function() {
+                    finalFrame.onload = null;
+                    printIframeWindow(finalFrame, function() {
+                        notifyTurno(turnoId);
+                    });
+                };
 
-            printFrame.src = turnoUrl;
-        }
+                finalFrame.src = `${turnoUrl}${turnoUrl.includes('?') ? '&' : '?'}t=${Date.now()}`;
+            }
+        }, 300);
     }
 
-    window.addEventListener('message', function(ev) {
+    window.addEventListener('message', async function(ev) {
         const data = ev.data || {};
         if (data.type !== 'RF_PRINT_DONE') return;
 
         if (data.mode === 'preticket' && data.comanda_id) {
-            notifyPreticket(parseInt(data.comanda_id, 10));
+            const comandaId = parseInt(data.comanda_id, 10);
+
+            await markPreticketPrinted(comandaId);
+            notifyPreticket(comandaId);
+
+            if (currentPreticketId === comandaId) {
+                currentPreticketId = null;
+                preticketBusy = false;
+
+                if (typeof window.__rfRefreshCaja === 'function') {
+                    window.__rfRefreshCaja();
+                }
+            }
         }
 
         if (data.mode === 'final' && data.venta_id) {
@@ -514,8 +572,13 @@
         }
     });
 
+    setInterval(pollPretickets, 3000);
+    pollPretickets();
+
     window.__rfPrintOpen = function(url) {
-        if (url) printFrame.src = url;
+        if (url) {
+            finalFrame.src = `${url}${url.includes('?') ? '&' : '?'}t=${Date.now()}`;
+        }
     };
 })();
 </script>

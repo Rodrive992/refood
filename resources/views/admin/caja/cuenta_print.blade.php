@@ -7,9 +7,9 @@
     <title>Preticket #{{ $comanda->id }}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: 'Courier New', monospace; 
-            background: white; 
+        body {
+            font-family: 'Courier New', monospace;
+            background: white;
             padding: 12px;
             width: 80mm;
             margin: 0 auto;
@@ -32,6 +32,7 @@
         .total-row { font-weight: bold; font-size: 12px; border-top: 1px dashed #000; padding-top: 6px; margin-top: 4px; }
         .footer { font-size: 9px; text-align: center; margin-top: 12px; color: #444; }
         .line { border-top: 1px dashed #000; margin: 6px 0; }
+
         @media print {
             body { padding: 0; }
         }
@@ -45,6 +46,7 @@
             ? \Carbon\Carbon::parse($comanda->cuenta_solicitada_at)->timezone('America/Argentina/Buenos_Aires')->format('d/m H:i')
             : '—';
         $impreso = now()->timezone('America/Argentina/Buenos_Aires')->format('d/m H:i');
+        $autoPrint = (int) request('autoprint', 1) === 1;
     @endphp
 
     <div class="header">
@@ -113,109 +115,63 @@
 
     <script>
         (function(){
-            // Variable para controlar que solo se imprima una vez
+            const autoPrint = @json($autoPrint);
+
             let printed = false;
             let notified = false;
-            
+
             function notifyParent() {
                 if (notified) return;
                 notified = true;
-                
+
                 try {
-                    // Intentar notificar al opener (ventana popup)
-                    if (window.opener && !window.opener.closed) {
-                        window.opener.postMessage({
-                            type: 'RF_PRINT_DONE',
-                            mode: 'preticket',
-                            comanda_id: {{ (int)$comanda->id }}
-                        }, '*');
-                        console.log('Notificado a opener');
-                    }
-                    
-                    // Intentar notificar al parent (iframe)
                     if (window.parent && window.parent !== window) {
                         window.parent.postMessage({
                             type: 'RF_PRINT_DONE',
                             mode: 'preticket',
                             comanda_id: {{ (int)$comanda->id }}
                         }, '*');
-                        console.log('Notificado a parent');
                     }
-                    
-                    // También intentar notificar al top
-                    if (window.top && window.top !== window && window.top !== window.parent) {
-                        window.top.postMessage({
-                            type: 'RF_PRINT_DONE',
-                            mode: 'preticket',
-                            comanda_id: {{ (int)$comanda->id }}
-                        }, '*');
-                        console.log('Notificado a top');
-                    }
-                } catch(e) {
+                } catch (e) {
                     console.log('Error notificando:', e);
-                }
-            }
-
-            function closeWindow() {
-                try {
-                    // Intentar cerrar la ventana
-                    window.close();
-                } catch(e) {
-                    console.log('Error al cerrar:', e);
                 }
             }
 
             function doPrint() {
                 if (printed) return;
                 printed = true;
-                
-                console.log('Iniciando impresión...');
-                
-                // Pequeño retraso para asegurar que todo esté renderizado
+
                 setTimeout(function() {
                     try {
                         window.focus();
                         window.print();
-                    } catch(e) {
-                        console.log('Error al imprimir:', e);
-                        // Si falla la impresión, igual notificamos y cerramos
+                    } catch (e) {
+                        console.log('Error al imprimir preticket:', e);
                         notifyParent();
-                        setTimeout(closeWindow, 300);
                     }
-                }, 100);
+                }, 150);
             }
 
-            // Escuchar el evento afterprint
             window.addEventListener('afterprint', function() {
-                console.log('afterprint disparado');
                 notifyParent();
-                setTimeout(closeWindow, 300);
             });
 
-            // Escuchar el evento beforeprint como fallback
-            window.addEventListener('beforeprint', function() {
-                console.log('beforeprint disparado');
-            });
-
-            // Si la página se carga y no se dispara afterprint, usar un timeout
             window.addEventListener('load', function() {
-                console.log('Página cargada');
-                doPrint();
-                
-                // Fallback: si después de 3 segundos no se ha notificado, hacerlo igual
-                setTimeout(function() {
-                    if (!notified) {
-                        console.log('Fallback: notificando por timeout');
+                if (autoPrint) {
+                    doPrint();
+
+                    setTimeout(function() {
                         notifyParent();
-                        closeWindow();
-                    }
-                }, 3000);
+                    }, 3500);
+                }
             });
 
-            // Si la página ya estaba cargada
-            if (document.readyState === 'complete') {
-                console.log('Página ya estaba cargada');
+            if (document.readyState === 'complete' && autoPrint) {
                 doPrint();
+
+                setTimeout(function() {
+                    notifyParent();
+                }, 3500);
             }
         })();
     </script>

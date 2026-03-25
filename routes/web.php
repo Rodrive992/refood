@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Auth;
 */
 use App\Http\Controllers\Admin\CartaController;
 use App\Http\Controllers\Admin\MesaController as AdminMesaController;
+use App\Http\Controllers\Admin\MapaMesasController;
 use App\Http\Controllers\Admin\ComandaController as AdminComandaController;
 use App\Http\Controllers\Admin\VentaController;
 use App\Http\Controllers\Admin\CajaController;
@@ -18,6 +19,7 @@ use App\Http\Controllers\Admin\CajaTurnoController;
 use App\Http\Controllers\Admin\CajaMovimientoController;
 use App\Http\Controllers\Admin\MozosController;
 use App\Http\Controllers\Admin\NavController;
+
 /*
 |--------------------------------------------------------------------------
 | MOZO
@@ -43,7 +45,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/dashboard', function () {
         $user = auth()->user();
 
-        // ✅ Safety extra: si es mozo inactivo, lo sacamos (por las dudas)
+        // Safety extra: si es mozo inactivo, lo sacamos (por las dudas)
         if (($user->role ?? null) === 'mozo' && (string)($user->estado ?? 'activo') !== 'activo') {
             Auth::logout();
             request()->session()->invalidate();
@@ -105,17 +107,25 @@ Route::middleware(['auth'])->group(function () {
 
             /*
             |--------------------------------------------------------------------------
+            | MAPA DE MESAS (ADMIN)
+            |--------------------------------------------------------------------------
+            */
+            Route::get('/mesas/mapa', [MapaMesasController::class, 'index'])->name('mesas.mapa.index');
+            Route::patch('/mesas/mapa/config', [MapaMesasController::class, 'updateConfig'])->name('mesas.mapa.config');
+            Route::patch('/mesas/mapa/caja', [MapaMesasController::class, 'updateCaja'])->name('mesas.mapa.caja');
+            Route::post('/mesas/mapa/celdas/toggle', [MapaMesasController::class, 'toggleCelda'])->name('mesas.mapa.celdas.toggle');
+            Route::patch('/mesas/mapa/mesas/{mesa}/posicion', [MapaMesasController::class, 'updateMesaPosicion'])->name('mesas.mapa.mesas.posicion');
+            Route::patch('/mesas/mapa/mesas/{mesa}/quitar', [MapaMesasController::class, 'quitarMesa'])->name('mesas.mapa.mesas.quitar');
+            Route::delete('/mesas/mapa/paredes', [MapaMesasController::class, 'limpiarParedes'])->name('mesas.mapa.paredes.limpiar');
+
+            /*
+            |--------------------------------------------------------------------------
             | COMANDAS (ADMIN)
             |--------------------------------------------------------------------------
             */
             Route::get('/comandas', [AdminComandaController::class, 'index'])->name('comandas.index');
-
-            // ✅ Poll AJAX (refresco automático)
             Route::get('/comandas/poll', [AdminComandaController::class, 'poll'])->name('comandas.poll');
-
-            // ✅ Imprimir comanda (ticket cocina)
             Route::get('/comandas/{comanda}/print', [AdminComandaController::class, 'print'])->name('comandas.print');
-
             Route::get('/comandas/{comanda}', [AdminComandaController::class, 'show'])->name('comandas.show');
 
             /*
@@ -129,12 +139,19 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/caja/pendientes-poll', [CajaController::class, 'pendientesPoll'])->name('caja.pendientesPoll');
             Route::get('/caja/mesas-poll', [CajaController::class, 'mesasPoll'])->name('caja.mesasPoll');
 
+            // NUEVO: polling de pretickets solicitados por mozo
+            Route::get('/caja/pretickets-poll', [CajaController::class, 'preticketsPoll'])->name('caja.preticketsPoll');
+
             Route::get('/caja/comandas/{comanda}', [CajaController::class, 'show'])->name('caja.show');
             Route::get('/caja/comandas/{comanda}/cuenta', [CajaController::class, 'cuenta'])->name('caja.cuenta');
-            
-            // ✅ NUEVA RUTA: Impresión directa del preticket
+
+            // Impresión directa del preticket
             Route::get('/caja/comandas/{comanda}/print', [CajaController::class, 'printPreticket'])->name('caja.cuenta.print');
-            
+
+            // NUEVO: marcar preticket como impreso
+            Route::post('/caja/comandas/{comanda}/preticket-printed', [CajaController::class, 'markPreticketPrinted'])
+                ->name('caja.preticketPrinted');
+
             Route::post('/caja/comandas/{comanda}/cobrar', [CajaController::class, 'cobrar'])->name('caja.cobrar');
 
             // Admin puede agregar / quitar items con cuenta solicitada
@@ -155,7 +172,6 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/caja/turno/cerrar', [CajaTurnoController::class, 'cerrar'])
                 ->name('caja.turno.cerrar');
 
-            // ✅ Ticket del cierre de turno
             Route::get('/caja/turnos/{caja}/ticket', [CajaTurnoController::class, 'ticket'])
                 ->name('caja.turno.ticket');
 
@@ -167,7 +183,6 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/caja/movimientos', [CajaMovimientoController::class, 'store'])
                 ->name('caja.movimientos.store');
 
-            // ✅ Alias para las vistas (NO tocar blade)
             Route::post('/caja/turno/movimiento', [CajaMovimientoController::class, 'store'])
                 ->name('caja.turno.movimiento');
 
@@ -208,7 +223,6 @@ Route::middleware(['auth'])->group(function () {
     /*
     |--------------------------------------------------------------------------
     | MOZO (y admin usando POS)
-    | ✅ Agregado: mozo.activo
     |--------------------------------------------------------------------------
     */
     Route::middleware(['role:mozo,admin', 'mozo.activo'])
@@ -244,5 +258,9 @@ Route::middleware(['auth'])->group(function () {
 
             Route::post('/comandas/{comanda}/solicitar-cuenta', [MozoComandaController::class, 'solicitarCuenta'])
                 ->name('comandas.solicitarCuenta');
+
+            // NUEVO: pedir impresión remota de preticket en caja
+            Route::post('/comandas/{comanda}/pedir-preticket', [MozoComandaController::class, 'pedirPreticket'])
+                ->name('comandas.pedirPreticket');
         });
 });

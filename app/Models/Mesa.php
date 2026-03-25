@@ -16,6 +16,10 @@ class Mesa extends Model
         'capacidad',
         'estado',
         'observacion',
+        'pos_x',
+        'pos_y',
+        'ancho_mapa',
+        'alto_mapa',
         'atendida_por',
         'atendida_at',
     ];
@@ -23,6 +27,10 @@ class Mesa extends Model
     protected $casts = [
         'id_local'      => 'integer',
         'capacidad'     => 'integer',
+        'pos_x'         => 'integer',
+        'pos_y'         => 'integer',
+        'ancho_mapa'    => 'integer',
+        'alto_mapa'     => 'integer',
         'atendida_por'  => 'integer',
         'atendida_at'   => 'datetime',
         'created_at'    => 'datetime',
@@ -57,5 +65,10 @@ class Mesa extends Model
     public function comandas(): HasMany
     {
         return $this->hasMany(Comanda::class, 'id_mesa');
+    }
+
+    public function estaPosicionadaEnMapa(): bool
+    {
+        return !is_null($this->pos_x) && !is_null($this->pos_y);
     }
 }

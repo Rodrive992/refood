@@ -18,13 +18,16 @@ class Comanda extends Model
 
         'estado',
 
-        // NUEVO: cuenta solicitada
         'cuenta_solicitada',
         'cuenta_solicitada_at',
         'cuenta_solicitada_por',
         'cuenta_solicitada_nota',
 
-        // NUEVO: total estimado y estado caja
+        'preticket_pendiente',
+        'preticket_solicitado_at',
+        'preticket_solicitado_por',
+        'preticket_impreso_at',
+
         'total_estimado',
         'estado_caja',
 
@@ -38,10 +41,15 @@ class Comanda extends Model
         'id_mesa' => 'integer',
         'id_mozo' => 'integer',
 
-        // NUEVO
         'cuenta_solicitada' => 'boolean',
         'cuenta_solicitada_at' => 'datetime',
         'cuenta_solicitada_por' => 'integer',
+
+        'preticket_pendiente' => 'boolean',
+        'preticket_solicitado_at' => 'datetime',
+        'preticket_solicitado_por' => 'integer',
+        'preticket_impreso_at' => 'datetime',
+
         'total_estimado' => 'decimal:2',
 
         'opened_at' => 'datetime',
@@ -49,12 +57,6 @@ class Comanda extends Model
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
-
-    /*
-    |--------------------------------------------------------------------------
-    | Relaciones
-    |--------------------------------------------------------------------------
-    */
 
     public function local(): BelongsTo
     {
@@ -71,10 +73,14 @@ class Comanda extends Model
         return $this->belongsTo(User::class, 'id_mozo');
     }
 
-    // NUEVO: quién tocó "Solicitar cuenta"
     public function cuentaSolicitadaPor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'cuenta_solicitada_por');
+    }
+
+    public function preticketSolicitadoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'preticket_solicitado_por');
     }
 
     public function items(): HasMany
@@ -82,19 +88,10 @@ class Comanda extends Model
         return $this->hasMany(ComandaItem::class, 'id_comanda');
     }
 
-    /**
-     * Venta asociada (si existe)
-     */
     public function venta(): HasOne
     {
         return $this->hasOne(Venta::class, 'id_comanda');
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Scopes útiles
-    |--------------------------------------------------------------------------
-    */
 
     public function scopeActivas($query)
     {
@@ -112,12 +109,6 @@ class Comanda extends Model
         return $query->whereIn('estado', ['cerrada', 'anulada']);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Helpers
-    |--------------------------------------------------------------------------
-    */
-
     public function getEsCobrableAttribute(): bool
     {
         return !in_array($this->estado, ['cerrada', 'anulada'], true);
@@ -125,7 +116,6 @@ class Comanda extends Model
 
     public function getSubtotalAttribute(): float
     {
-        // Calculado por snapshot
         return (float) $this->items->sum(function ($item) {
             return (float) $item->precio_snapshot * (float) $item->cantidad;
         });

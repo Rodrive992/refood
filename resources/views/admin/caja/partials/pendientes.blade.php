@@ -10,6 +10,7 @@
             $mesaNombre = $c->mesa->nombre ?? 'Sin mesa';
             $mozoNombre = $c->mozo->name ?? ('Mozo #' . ($c->id_mozo ?? '-'));
             $totalEst = number_format((float)($c->total_estimado ?? 0), 0, ',', '.');
+            $printUrl = route('admin.caja.cuenta.print', ['comanda' => $c->id, 'autoprint' => 0]);
         @endphp
 
         <div class="p-3 flex items-start justify-between gap-3 hover:bg-slate-50 transition-colors">
@@ -38,6 +39,7 @@
                             {{ optional($c->cuenta_solicitada_at)->format('d/m H:i') }}
                         </span>
                     </div>
+
                     @if(!empty($c->cuenta_solicitada_nota))
                         <div class="text-[10px] italic" style="color: #64748B;">“{{ $c->cuenta_solicitada_nota }}”</div>
                     @endif
@@ -52,13 +54,14 @@
                 </div>
 
                 <div class="flex flex-col gap-1">
-                    <a href="{{ route('admin.caja.cuenta', $c) }}"
+                    <a href="{{ $printUrl }}"
                        class="js-print-preticket px-2.5 py-1 rounded-lg text-[15px] font-medium text-white text-center whitespace-nowrap"
                        style="background: #0F172A;"
-                       data-print-url="{{ route('admin.caja.cuenta', $c) }}"
+                       data-print-url="{{ $printUrl }}"
                        data-comanda-id="{{ (int)$c->id }}">
                         🖨️ Imprimir
                     </a>
+
                     <a href="{{ route('admin.caja.show', $c) }}"
                        class="px-2.5 py-1 rounded-lg text-[15px] font-medium text-center whitespace-nowrap"
                        style="background: white; border: 1px solid #E2E8F0; color: #475569;">
