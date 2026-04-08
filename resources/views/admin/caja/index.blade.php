@@ -1,6 +1,7 @@
 {{-- resources/views/admin/caja/index.blade.php --}}
 
 @extends('layouts.app')
+@section('title', 'REFOOD - CAJA')
 
 @section('content')
 <div class="max-w-7xl mx-auto px-4 md:px-6 py-6">
@@ -318,7 +319,36 @@
     </div>
 </div>
 
-{{-- Poll general --}}
+{{-- Toast general --}}
+<div id="rfCajaToast"
+    class="fixed bottom-5 right-5 z-50 pointer-events-none opacity-0 translate-y-2 transition duration-200 ease-out">
+    <div class="pointer-events-auto rounded-2xl border border-emerald-200 bg-white shadow-lg px-4 py-3 flex items-start gap-3">
+        <div class="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+            ✅
+        </div>
+        <div class="min-w-0">
+            <div class="font-extrabold text-slate-900" id="rfCajaToastTitle">Listo</div>
+            <div class="text-sm text-slate-600" id="rfCajaToastMsg">Impreso.</div>
+        </div>
+        <button type="button" id="rfCajaToastClose" class="ml-2 text-slate-400 hover:text-slate-700 font-bold">✕</button>
+    </div>
+</div>
+
+{{-- Toast cocina --}}
+<div id="rfCocinaToast"
+    class="fixed bottom-20 right-5 z-50 pointer-events-none opacity-0 translate-y-2 transition duration-200 ease-out">
+    <div class="pointer-events-auto rounded-2xl border border-orange-200 bg-white shadow-lg px-4 py-3 flex items-start gap-3">
+        <div class="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-orange-100 text-orange-700">
+            🖨️
+        </div>
+        <div class="min-w-0">
+            <div class="font-extrabold text-slate-900" id="rfCocinaToastTitle">Comanda impresa</div>
+            <div class="text-sm text-slate-600" id="rfCocinaToastMsg">La comanda de cocina fue enviada a impresión.</div>
+        </div>
+        <button type="button" id="rfCocinaToastClose" class="ml-2 text-slate-400 hover:text-slate-700 font-bold">✕</button>
+    </div>
+</div>
+
 <script>
 (function() {
     const POLL_MS = 3000;
@@ -346,7 +376,6 @@
             });
 
             if (!res.ok) return;
-
             const data = await res.json();
             if (!data || !data.ok) return;
 
@@ -367,7 +396,6 @@
             });
 
             if (!res.ok) return;
-
             const data = await res.json();
             if (!data || !data.ok) return;
 
@@ -378,10 +406,7 @@
     }
 
     async function refreshAll() {
-        await Promise.all([
-            refreshPendientes(),
-            refreshMesas()
-        ]);
+        await Promise.all([refreshPendientes(), refreshMesas()]);
     }
 
     function setStatus() {
@@ -399,16 +424,14 @@
         timer = setInterval(tick, POLL_MS);
     }
 
-    if (btnPend) btnPend.addEventListener('click', refreshAll);
-    if (btnMesas) btnMesas.addEventListener('click', refreshAll);
+    btnPend?.addEventListener('click', refreshAll);
+    btnMesas?.addEventListener('click', refreshAll);
 
-    if (toggleBtn) {
-        toggleBtn.addEventListener('click', function() {
-            enabled = !enabled;
-            setStatus();
-            if (enabled) refreshAll();
-        });
-    }
+    toggleBtn?.addEventListener('click', function() {
+        enabled = !enabled;
+        setStatus();
+        if (enabled) refreshAll();
+    });
 
     window.__rfRefreshCaja = refreshAll;
 
@@ -418,7 +441,6 @@
 })();
 </script>
 
-{{-- Confirmación cierre de turno --}}
 <script>
 (function () {
     const form = document.getElementById('rfCerrarTurnoForm');
@@ -445,55 +467,40 @@
         document.body.classList.remove('overflow-hidden');
     }
 
-    btnOpen.addEventListener('click', function () {
-        openModal();
-    });
-
+    btnOpen.addEventListener('click', openModal);
     backdrop?.addEventListener('click', closeModal);
     btnCancel?.addEventListener('click', closeModal);
 
     document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') {
-            closeModal();
-        }
+        if (e.key === 'Escape') closeModal();
     });
 
     btnAccept.addEventListener('click', function () {
         if (sending) return;
-
         sending = true;
         btnAccept.disabled = true;
         btnAccept.textContent = 'Cerrando...';
-
         form.submit();
     });
 })();
 </script>
 
-{{-- Toast + impresión --}}
-<div id="rfCajaToast"
-    class="fixed bottom-5 right-5 z-50 pointer-events-none opacity-0 translate-y-2 transition duration-200 ease-out">
-    <div class="pointer-events-auto rounded-2xl border border-emerald-200 bg-white shadow-lg px-4 py-3 flex items-start gap-3">
-        <div class="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
-            ✅
-        </div>
-        <div class="min-w-0">
-            <div class="font-extrabold text-slate-900" id="rfCajaToastTitle">Listo</div>
-            <div class="text-sm text-slate-600" id="rfCajaToastMsg">Impreso.</div>
-        </div>
-        <button type="button" id="rfCajaToastClose" class="ml-2 text-slate-400 hover:text-slate-700 font-bold">✕</button>
-    </div>
-</div>
-
 <script>
 (function() {
+    const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
     const toast = document.getElementById('rfCajaToast');
     const toastTitle = document.getElementById('rfCajaToastTitle');
     const toastMsg = document.getElementById('rfCajaToastMsg');
     const toastClose = document.getElementById('rfCajaToastClose');
-    const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+    const cocinaToast = document.getElementById('rfCocinaToast');
+    const cocinaToastTitle = document.getElementById('rfCocinaToastTitle');
+    const cocinaToastMsg = document.getElementById('rfCocinaToastMsg');
+    const cocinaToastClose = document.getElementById('rfCocinaToastClose');
 
     let toastTimer = null;
+    let cocinaToastTimer = null;
 
     function showToast(title, msg) {
         if (!toast) return;
@@ -512,7 +519,25 @@
         toast.classList.remove('opacity-100', 'translate-y-0');
     }
 
+    function showCocinaToast(title, msg) {
+        if (!cocinaToast) return;
+        cocinaToastTitle.textContent = title || 'Comanda impresa';
+        cocinaToastMsg.textContent = msg || '';
+        cocinaToast.classList.remove('opacity-0', 'translate-y-2');
+        cocinaToast.classList.add('opacity-100', 'translate-y-0');
+
+        if (cocinaToastTimer) clearTimeout(cocinaToastTimer);
+        cocinaToastTimer = setTimeout(hideCocinaToast, 2600);
+    }
+
+    function hideCocinaToast() {
+        if (!cocinaToast) return;
+        cocinaToast.classList.add('opacity-0', 'translate-y-2');
+        cocinaToast.classList.remove('opacity-100', 'translate-y-0');
+    }
+
     toastClose?.addEventListener('click', hideToast);
+    cocinaToastClose?.addEventListener('click', hideCocinaToast);
 
     let preticketFrame = document.getElementById('rfPreticketFrame');
     if (!preticketFrame) {
@@ -540,6 +565,20 @@
         finalFrame.style.border = '0';
         finalFrame.style.opacity = '0';
         document.body.appendChild(finalFrame);
+    }
+
+    let cocinaFrame = document.getElementById('rfCocinaFrame');
+    if (!cocinaFrame) {
+        cocinaFrame = document.createElement('iframe');
+        cocinaFrame.id = 'rfCocinaFrame';
+        cocinaFrame.style.position = 'fixed';
+        cocinaFrame.style.right = '0';
+        cocinaFrame.style.bottom = '0';
+        cocinaFrame.style.width = '0';
+        cocinaFrame.style.height = '0';
+        cocinaFrame.style.border = '0';
+        cocinaFrame.style.opacity = '0';
+        document.body.appendChild(cocinaFrame);
     }
 
     function printIframeWindow(frame, doneCb) {
@@ -586,6 +625,12 @@
         showToast('Cierre de turno impreso', 'Turno #' + turnoId + ' enviado a impresión.');
     }
 
+    function notifyComandaCocina(comandaId) {
+        const key = 'cocina:' + comandaId;
+        if (!once(key, 5000)) return;
+        showCocinaToast('Comanda impresa', 'Comanda #' + comandaId + ' enviada a impresión de cocina.');
+    }
+
     async function markPreticketPrinted(comandaId) {
         try {
             await fetch(`{{ url('/admin/caja/comandas') }}/${comandaId}/preticket-printed`, {
@@ -598,6 +643,21 @@
             });
         } catch (e) {
             console.warn('No se pudo marcar preticket como impreso', e);
+        }
+    }
+
+    async function markComandaPrinted(comandaId) {
+        try {
+            await fetch(`{{ url('/admin/caja/comandas') }}/${comandaId}/comanda-printed`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': csrf,
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json'
+                }
+            });
+        } catch (e) {
+            console.warn('No se pudo marcar comanda como impresa', e);
         }
     }
 
@@ -617,7 +677,6 @@
             if (!remote) {
                 printIframeWindow(preticketFrame, async function() {
                     notifyPreticket(currentPreticketId);
-
                     preticketBusy = false;
                     currentPreticketId = null;
 
@@ -629,6 +688,32 @@
         };
 
         preticketFrame.src = `${printUrl}${printUrl.includes('?') ? '&' : '?'}t=${Date.now()}`;
+    }
+
+    let cocinaBusy = false;
+    let currentCocinaId = null;
+
+    function triggerComandaCocina(printUrl, comandaId) {
+        if (!printUrl || !comandaId) return;
+        if (cocinaBusy) return;
+
+        cocinaBusy = true;
+        currentCocinaId = Number(comandaId);
+
+        cocinaFrame.onload = function() {
+            cocinaFrame.onload = null;
+
+            setTimeout(async function () {
+                if (currentCocinaId === comandaId) {
+                    await markComandaPrinted(comandaId);
+                    notifyComandaCocina(comandaId);
+                    currentCocinaId = null;
+                    cocinaBusy = false;
+                }
+            }, 1800);
+        };
+
+        cocinaFrame.src = `${printUrl}${printUrl.includes('?') ? '&' : '?'}autoprint=1&t=${Date.now()}`;
     }
 
     async function pollPretickets() {
@@ -644,7 +729,6 @@
             });
 
             if (!res.ok) return;
-
             const data = await res.json();
             if (!data || !data.ok || !Array.isArray(data.jobs) || !data.jobs.length) return;
 
@@ -658,6 +742,34 @@
             triggerPreticket(remoteUrl, comandaId, true);
         } catch (e) {
             console.warn('Error en pollPretickets:', e);
+        }
+    }
+
+    async function pollComandasCocina() {
+        if (cocinaBusy) return;
+
+        try {
+            const res = await fetch("{{ route('admin.caja.comandasCocinaPoll') }}", {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json'
+                },
+                cache: 'no-store'
+            });
+
+            if (!res.ok) return;
+            const data = await res.json();
+            if (!data || !data.ok || !Array.isArray(data.jobs) || !data.jobs.length) return;
+
+            const job = data.jobs[0];
+            const comandaId = Number(job.id || 0);
+            const url = job.print_url || '';
+
+            if (!comandaId || !url) return;
+
+            triggerComandaCocina(url, comandaId);
+        } catch (e) {
+            console.warn('Error en pollComandasCocina:', e);
         }
     }
 
@@ -730,19 +842,52 @@
                     window.__rfRefreshCaja();
                 }
             }
+            return;
         }
 
         if (data.mode === 'final' && data.venta_id) {
             notifyFinal(parseInt(data.venta_id, 10));
+            return;
         }
 
         if (data.mode === 'turno' && data.turno_id) {
             notifyTurno(parseInt(data.turno_id, 10));
+            return;
+        }
+
+        if (data.comanda_id) {
+            const comandaId = parseInt(data.comanda_id, 10);
+
+            if (currentPreticketId === comandaId) {
+                await markPreticketPrinted(comandaId);
+                notifyPreticket(comandaId);
+                currentPreticketId = null;
+                preticketBusy = false;
+
+                if (typeof window.__rfRefreshCaja === 'function') {
+                    window.__rfRefreshCaja();
+                }
+                return;
+            }
+
+            if (currentCocinaId === comandaId) {
+                await markComandaPrinted(comandaId);
+                notifyComandaCocina(comandaId);
+                currentCocinaId = null;
+                cocinaBusy = false;
+                return;
+            }
+
+            await markComandaPrinted(comandaId);
+            notifyComandaCocina(comandaId);
         }
     });
 
     setInterval(pollPretickets, 3000);
     pollPretickets();
+
+    setInterval(pollComandasCocina, 3000);
+    pollComandasCocina();
 
     window.__rfPrintOpen = function(url) {
         if (url) {

@@ -1,6 +1,7 @@
 {{-- resources/views/admin/comandas/index.blade.php --}}
 
 @extends('layouts.app')
+@section('title', 'REFOOD - CAJA')
 
 @section('content')
 <div class="max-w-7xl mx-auto px-4 md:px-6 py-6">

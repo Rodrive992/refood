@@ -535,4 +535,50 @@ class CajaController extends Controller
 
         return view('admin.caja.cuenta_print', compact('comanda', 'subtotal'));
     }
+
+    public function comandasCocinaPoll(Request $request)
+    {
+        $localId = $this->localId();
+
+        $pendientes = Comanda::query()
+            ->where('id_local', $localId)
+            ->where('comanda_print_pendiente', 1)
+            ->whereNotIn('estado', ['cerrada', 'anulada'])
+            ->with(['mesa', 'mozo'])
+            ->orderBy('comanda_print_solicitado_at')
+            ->get();
+
+        $jobs = $pendientes->map(function ($comanda) {
+            return [
+                'id' => (int) $comanda->id,
+                'mesa' => $comanda->mesa->nombre ?? 'Sin mesa',
+                'mozo' => $comanda->mozo->name ?? ('#' . $comanda->id_mozo),
+                'print_url' => route('admin.comandas.print', $comanda),
+                'solicitado_at' => optional($comanda->comanda_print_solicitado_at)?->toISOString(),
+            ];
+        })->values();
+
+        return response()->json([
+            'ok' => true,
+            'jobs' => $jobs,
+            'count' => $jobs->count(),
+            'ts' => now()->toISOString(),
+        ]);
+    }
+
+    public function markComandaPrinted(Comanda $comanda)
+    {
+        $localId = $this->localId();
+        abort_unless((int) $comanda->id_local === $localId, 403);
+
+        $comanda->update([
+            'comanda_print_pendiente' => 0,
+            'comanda_print_impreso_at' => now('America/Argentina/Buenos_Aires'),
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Comanda marcada como impresa.',
+        ]);
+    }
 }

@@ -138,14 +138,21 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/caja/pendientes-poll', [CajaController::class, 'pendientesPoll'])->name('caja.pendientesPoll');
             Route::get('/caja/mesas-poll', [CajaController::class, 'mesasPoll'])->name('caja.mesasPoll');
 
+            // Pretickets remotos
             Route::get('/caja/pretickets-poll', [CajaController::class, 'preticketsPoll'])->name('caja.preticketsPoll');
+            Route::post('/caja/comandas/{comanda}/preticket-printed', [CajaController::class, 'markPreticketPrinted'])
+                ->name('caja.preticketPrinted');
+
+            // NUEVO: comandas de cocina remotas
+            Route::get('/caja/comandas-cocina-poll', [CajaController::class, 'comandasCocinaPoll'])
+                ->name('caja.comandasCocinaPoll');
+
+            Route::post('/caja/comandas/{comanda}/comanda-printed', [CajaController::class, 'markComandaPrinted'])
+                ->name('caja.comandaPrinted');
 
             Route::get('/caja/comandas/{comanda}', [CajaController::class, 'show'])->name('caja.show');
             Route::get('/caja/comandas/{comanda}/cuenta', [CajaController::class, 'cuenta'])->name('caja.cuenta');
             Route::get('/caja/comandas/{comanda}/print', [CajaController::class, 'printPreticket'])->name('caja.cuenta.print');
-
-            Route::post('/caja/comandas/{comanda}/preticket-printed', [CajaController::class, 'markPreticketPrinted'])
-                ->name('caja.preticketPrinted');
 
             Route::post('/caja/comandas/{comanda}/cobrar', [CajaController::class, 'cobrar'])->name('caja.cobrar');
 
@@ -250,13 +257,14 @@ Route::middleware(['auth'])->group(function () {
             Route::patch('/comandas/{comanda}/estado', [MozoComandaController::class, 'setEstado'])
                 ->name('comandas.estado');
 
-            Route::get('/comandas/{comanda}/print', [MozoComandaController::class, 'print'])
-                ->name('comandas.print');
-
             Route::post('/comandas/{comanda}/solicitar-cuenta', [MozoComandaController::class, 'solicitarCuenta'])
                 ->name('comandas.solicitarCuenta');
 
             Route::post('/comandas/{comanda}/pedir-preticket', [MozoComandaController::class, 'pedirPreticket'])
                 ->name('comandas.pedirPreticket');
+
+            // NUEVO: pedir impresión remota de comanda cocina en admin/caja
+            Route::post('/comandas/{comanda}/pedir-impresion-cocina', [MozoComandaController::class, 'pedirImpresionCocina'])
+                ->name('comandas.pedirImpresionCocina');
         });
 });

@@ -13,6 +13,11 @@
         && (int)$mesa->atendida_por !== (int)$mozoId;
 
     $nombreMozo = $mesa?->mozoAtendiendo?->name;
+
+    $comandaPrintPendiente = $com && (int)($com->comanda_print_pendiente ?? 0) === 1;
+    $comandaPrintImpresaAt = !empty($com?->comanda_print_impreso_at)
+        ? \Carbon\Carbon::parse($com->comanda_print_impreso_at)->format('H:i')
+        : null;
 @endphp
 
 <div class="bg-white rounded-2xl border rf-scrollbar" style="border-color: var(--rf-border);">
@@ -107,15 +112,26 @@
                         </button>
 
                         @if($com)
-                            <a
-                                href="{{ route('mozo.comandas.print', $com) }}"
-                                class="js-print-comanda px-4 py-2 rounded-xl text-sm font-semibold rf-hover-lift"
-                                style="background: #0F172A; color: white;"
-                                data-print-url="{{ route('mozo.comandas.print', $com) }}"
-                                data-comanda-id="{{ $com->id }}"
-                            >
-                                Imprimir comanda
-                            </a>
+                            @if($comandaPrintPendiente)
+                                <button
+                                    type="button"
+                                    disabled
+                                    class="px-4 py-2 rounded-xl text-sm font-semibold border"
+                                    style="border-color: var(--rf-primary); background: rgba(249,115,22,0.10); color: var(--rf-primary);">
+                                    Comanda enviada a cocina
+                                </button>
+                            @else
+                                <form method="POST"
+                                      action="{{ route('mozo.comandas.pedirImpresionCocina', $com) }}">
+                                    @csrf
+                                    <button
+                                        type="submit"
+                                        class="px-4 py-2 rounded-xl text-sm font-semibold rf-hover-lift border"
+                                        style="border-color: #0F172A; background: white; color: #0F172A;">
+                                        Imprimir comanda
+                                    </button>
+                                </form>
+                            @endif
                         @endif
                     @endif
                 @endif
@@ -161,6 +177,18 @@
                     <div class="mt-3 text-xs px-3 py-2 rounded-xl"
                          style="background: rgba(239,68,68,0.10); color: #dc2626;">
                         Esta mesa está bloqueada para vos porque la está atendiendo {{ $nombreMozo ?? 'otro mozo' }}.
+                    </div>
+                @endif
+
+                @if($com && $comandaPrintPendiente)
+                    <div class="mt-3 text-xs px-3 py-2 rounded-xl"
+                         style="background: rgba(249,115,22,0.10); color: var(--rf-primary);">
+                        La comanda fue enviada a la computadora de administración para imprimir en cocina.
+                    </div>
+                @elseif($com && $comandaPrintImpresaAt)
+                    <div class="mt-3 text-xs px-3 py-2 rounded-xl"
+                         style="background: rgba(16,185,129,0.10); color: #059669;">
+                        Última impresión de cocina registrada a las {{ $comandaPrintImpresaAt }}.
                     </div>
                 @endif
             </div>

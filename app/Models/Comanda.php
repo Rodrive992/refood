@@ -28,6 +28,12 @@ class Comanda extends Model
         'preticket_solicitado_por',
         'preticket_impreso_at',
 
+        // NUEVO: impresión remota de comanda cocina
+        'comanda_print_pendiente',
+        'comanda_print_solicitado_at',
+        'comanda_print_solicitado_por',
+        'comanda_print_impreso_at',
+
         'total_estimado',
         'estado_caja',
 
@@ -49,6 +55,12 @@ class Comanda extends Model
         'preticket_solicitado_at' => 'datetime',
         'preticket_solicitado_por' => 'integer',
         'preticket_impreso_at' => 'datetime',
+
+        // NUEVO: impresión remota de comanda cocina
+        'comanda_print_pendiente' => 'boolean',
+        'comanda_print_solicitado_at' => 'datetime',
+        'comanda_print_solicitado_por' => 'integer',
+        'comanda_print_impreso_at' => 'datetime',
 
         'total_estimado' => 'decimal:2',
 
@@ -81,6 +93,12 @@ class Comanda extends Model
     public function preticketSolicitadoPor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'preticket_solicitado_por');
+    }
+
+    // NUEVO
+    public function comandaPrintSolicitadoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'comanda_print_solicitado_por');
     }
 
     public function items(): HasMany

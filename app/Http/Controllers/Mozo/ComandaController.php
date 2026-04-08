@@ -431,6 +431,68 @@ class ComandaController extends Controller
         return back()->with('ok', 'Preticket enviado a caja para impresión.');
     }
 
+    public function pedirImpresionCocina(Comanda $comanda)
+    {
+        $this->assertComandaLocal($comanda);
+
+        DB::transaction(function () use ($comanda) {
+            $comanda = Comanda::query()
+                ->where('id', $comanda->id)
+                ->where('id_local', $this->localId())
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            abort_if(
+                in_array($comanda->estado, ['cerrada', 'anulada'], true),
+                422,
+                'La comanda ya está cerrada o anulada.'
+            );
+
+            abort_if(
+                empty($comanda->id_mesa),
+                422,
+                'La comanda no tiene mesa asociada.'
+            );
+
+            $mesa = Mesa::query()
+                ->where('id', $comanda->id_mesa)
+                ->where('id_local', $this->localId())
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            abort_if(
+                in_array($mesa->estado, ['inactiva', 'fuera_servicio'], true),
+                422,
+                'La mesa no está disponible.'
+            );
+
+            abort_if(
+                $mesa->estado === 'libre',
+                422,
+                'La mesa está libre.'
+            );
+
+            abort_if(
+                (int) ($mesa->atendida_por ?? 0) !== $this->mozoId(),
+                403,
+                'Esta mesa está siendo atendida por otro mozo.'
+            );
+
+            if ((int)($comanda->comanda_print_pendiente ?? 0) === 1) {
+                return;
+            }
+
+            $comanda->update([
+                'comanda_print_pendiente'      => 1,
+                'comanda_print_solicitado_at'  => now(),
+                'comanda_print_solicitado_por' => auth()->id(),
+                'comanda_print_impreso_at'     => null,
+            ]);
+        });
+
+        return back()->with('ok', 'Comanda enviada a la PC de administración para impresión en cocina.');
+    }
+
     public function updateItem(Request $request, ComandaItem $comandaItem)
     {
         $localId = $this->localId();
@@ -481,20 +543,5 @@ class ComandaController extends Controller
         return redirect()
             ->route('mozo.dashboard', ['mesa_id' => $comanda->id_mesa])
             ->with('ok', 'Estado de comanda actualizado.');
-    }
-
-    public function print(\App\Models\Comanda $comanda)
-    {
-        $user = auth()->user();
-        $localId = (int) ($user->id_local ?? 0);
-
-        abort_if(empty($localId), 403, 'Tu usuario no tiene un local asignado.');
-        abort_unless((int) $comanda->id_local === $localId, 403);
-
-        $comanda->load(['mesa', 'mozo', 'items']);
-
-        $printedAt = now()->setTimezone('America/Argentina/Buenos_Aires');
-
-        return view('admin.comandas.print', compact('comanda', 'printedAt'));
     }
 }
