@@ -63,13 +63,13 @@ class CajaTurnoController extends Controller
                 ->lockForUpdate()
                 ->first();
 
-            $turnoSiguiente = $ultima ? ((int)$ultima->turno + 1) : 1;
+            $turnoSiguiente = $ultima ? ((int) $ultima->turno + 1) : 1;
 
             $ultimaCerrada = $this->ultimaCajaCerrada($localId);
             $efectivoApertura = $ultimaCerrada ? (float) $ultimaCerrada->efectivo_turno : 0.0;
 
-            $ajIng = (float)($data['ajuste_ingreso'] ?? 0);
-            $ajSal = (float)($data['ajuste_salida'] ?? 0);
+            $ajIng = (float) ($data['ajuste_ingreso'] ?? 0);
+            $ajSal = (float) ($data['ajuste_salida'] ?? 0);
 
             if ($ajIng > 0 && $ajSal > 0) {
                 return back()->with('error', 'Usá solo ingreso o salida de ajuste, no ambos.');
@@ -87,7 +87,7 @@ class CajaTurnoController extends Controller
                 'efectivo_apertura' => $efectivoApertura,
                 'ingreso_efectivo'  => 0,
                 'salida_efectivo'   => 0,
-                'efectivo_turno'    => (float)$efectivoApertura,
+                'efectivo_turno'    => (float) $efectivoApertura,
 
                 'abierta_at'        => now('America/Argentina/Buenos_Aires'),
                 'cerrada_at'        => null,
@@ -148,18 +148,8 @@ class CajaTurnoController extends Controller
                 return back()->with('error', 'No hay un turno de caja abierto para cerrar.');
             }
 
-            $hayComandasActivas = Comanda::query()
-                ->where('id_local', $localId)
-                ->whereIn('estado', ['abierta', 'en_cocina', 'lista', 'entregada', 'cerrando'])
-                ->lockForUpdate()
-                ->exists();
-
-            if ($hayComandasActivas) {
-                return back()->with('error', 'No se puede cerrar el turno: hay comandas abiertas/activas. Cerrá o anulá todas antes de cerrar caja.');
-            }
-
-            $ajIng = (float)($data['ajuste_ingreso'] ?? 0);
-            $ajSal = (float)($data['ajuste_salida'] ?? 0);
+            $ajIng = (float) ($data['ajuste_ingreso'] ?? 0);
+            $ajSal = (float) ($data['ajuste_salida'] ?? 0);
 
             if ($ajIng > 0 && $ajSal > 0) {
                 return back()->with('error', 'Usá solo ingreso o salida de ajuste, no ambos.');
@@ -189,6 +179,25 @@ class CajaTurnoController extends Controller
                 ]);
             }
 
+            // ✅ En vez de bloquear, anulamos comandas activas del local
+            $comandasActivas = Comanda::query()
+                ->where('id_local', $localId)
+                ->whereIn('estado', ['abierta', 'en_cocina', 'lista', 'entregada', 'cerrando'])
+                ->lockForUpdate()
+                ->get();
+
+            $cantidadAnuladas = $comandasActivas->count();
+
+            if ($cantidadAnuladas > 0) {
+                foreach ($comandasActivas as $comanda) {
+                    $comanda->update([
+                        'estado'      => 'anulada',
+                        'closed_at'   => now('America/Argentina/Buenos_Aires'),
+                        'estado_caja' => 'anulada',
+                    ]);
+                }
+            }
+
             $caja->refreshTotalesCache();
             $caja->refresh();
 
@@ -196,13 +205,22 @@ class CajaTurnoController extends Controller
             $caja->cerrada_at  = now('America/Argentina/Buenos_Aires');
             $caja->cerrada_por = $userId;
 
+            $obs = trim((string) ($caja->observacion ?? ''));
+
             if (!empty($data['observacion'])) {
-                $caja->observacion = trim((string)($caja->observacion ?? ''));
-                $caja->observacion = $caja->observacion === ''
-                    ? $data['observacion']
-                    : ($caja->observacion . ' | ' . $data['observacion']);
+                $obs = $obs === ''
+                    ? trim((string) $data['observacion'])
+                    : ($obs . ' | ' . trim((string) $data['observacion']));
             }
 
+            if ($cantidadAnuladas > 0) {
+                $leyendaAnulacion = "Se anularon {$cantidadAnuladas} comanda(s) pendiente(s) al cerrar turno.";
+                $obs = $obs === ''
+                    ? $leyendaAnulacion
+                    : ($obs . ' | ' . $leyendaAnulacion);
+            }
+
+            $caja->observacion = $obs !== '' ? $obs : null;
             $caja->save();
 
             User::query()
@@ -221,22 +239,25 @@ class CajaTurnoController extends Controller
 
             $printUrl = route('admin.caja.turno.ticket', $caja);
 
+            $mensaje = 'Turno de caja cerrado (#' . $caja->turno . '). ';
+            if ($cantidadAnuladas > 0) {
+                $mensaje .= 'Se anularon ' . $cantidadAnuladas . ' comanda(s) pendientes. ';
+            }
+            $mensaje .= 'Mozos inactivados y mesas liberadas. Efectivo final: ' .
+                number_format((float) $caja->efectivo_turno, 2, ',', '.');
+
             return redirect()
                 ->route('admin.caja.index')
-                ->with(
-                    'ok',
-                    'Turno de caja cerrado (#' . $caja->turno . '). Mozos inactivados y mesas liberadas. Efectivo final: ' .
-                    number_format((float)$caja->efectivo_turno, 2, ',', '.')
-                )
+                ->with('ok', $mensaje)
                 ->with('rf_print_turno_url', $printUrl)
-                ->with('rf_turno_id', (int)$caja->id);
+                ->with('rf_turno_id', (int) $caja->id);
         });
     }
 
     public function ticket(Caja $caja)
     {
         $localId = $this->localId();
-        abort_unless((int)$caja->id_local === $localId, 403);
+        abort_unless((int) $caja->id_local === $localId, 403);
 
         $movimientos = CajaMovimiento::query()
             ->where('id_caja', $caja->id)
@@ -271,10 +292,8 @@ class CajaTurnoController extends Controller
 
         $efectivoVentasNeto = (float) ($efectivoBruto - $ventasVuelto);
 
-        // ✅ Propinas desde ventas, no desde movimientos
         $propinas = (float) $ventas->sum('propina');
 
-        // ✅ Ingresos manuales/otros desde movimientos
         $otrosIngresos = (float) $movimientos
             ->where('tipo', 'ingreso')
             ->sum('monto');

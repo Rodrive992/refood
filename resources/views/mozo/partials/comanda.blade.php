@@ -70,7 +70,7 @@
         </div>
 
         @if($mesa)
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap justify-end">
                 @if(($mesa->estado ?? '') === 'libre')
                     <button
                         type="button"
@@ -105,6 +105,18 @@
                         >
                             Agregar items
                         </button>
+
+                        @if($com)
+                            <a
+                                href="{{ route('mozo.comandas.print', $com) }}"
+                                class="js-print-comanda px-4 py-2 rounded-xl text-sm font-semibold rf-hover-lift"
+                                style="background: #0F172A; color: white;"
+                                data-print-url="{{ route('mozo.comandas.print', $com) }}"
+                                data-comanda-id="{{ $com->id }}"
+                            >
+                                Imprimir comanda
+                            </a>
+                        @endif
                     @endif
                 @endif
             </div>

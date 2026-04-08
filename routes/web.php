@@ -45,7 +45,6 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/dashboard', function () {
         $user = auth()->user();
 
-        // Safety extra: si es mozo inactivo, lo sacamos (por las dudas)
         if (($user->role ?? null) === 'mozo' && (string)($user->estado ?? 'activo') !== 'activo') {
             Auth::logout();
             request()->session()->invalidate();
@@ -139,22 +138,17 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/caja/pendientes-poll', [CajaController::class, 'pendientesPoll'])->name('caja.pendientesPoll');
             Route::get('/caja/mesas-poll', [CajaController::class, 'mesasPoll'])->name('caja.mesasPoll');
 
-            // NUEVO: polling de pretickets solicitados por mozo
             Route::get('/caja/pretickets-poll', [CajaController::class, 'preticketsPoll'])->name('caja.preticketsPoll');
 
             Route::get('/caja/comandas/{comanda}', [CajaController::class, 'show'])->name('caja.show');
             Route::get('/caja/comandas/{comanda}/cuenta', [CajaController::class, 'cuenta'])->name('caja.cuenta');
-
-            // Impresión directa del preticket
             Route::get('/caja/comandas/{comanda}/print', [CajaController::class, 'printPreticket'])->name('caja.cuenta.print');
 
-            // NUEVO: marcar preticket como impreso
             Route::post('/caja/comandas/{comanda}/preticket-printed', [CajaController::class, 'markPreticketPrinted'])
                 ->name('caja.preticketPrinted');
 
             Route::post('/caja/comandas/{comanda}/cobrar', [CajaController::class, 'cobrar'])->name('caja.cobrar');
 
-            // Admin puede agregar / quitar items con cuenta solicitada
             Route::post('/caja/comandas/{comanda}/items', [CajaController::class, 'addItems'])
                 ->name('caja.items.add');
 
@@ -163,7 +157,7 @@ Route::middleware(['auth'])->group(function () {
 
             /*
             |--------------------------------------------------------------------------
-            | CAJA TURNO (abrir / cerrar)
+            | CAJA TURNO
             |--------------------------------------------------------------------------
             */
             Route::post('/caja/turno/abrir', [CajaTurnoController::class, 'abrir'])
@@ -177,7 +171,7 @@ Route::middleware(['auth'])->group(function () {
 
             /*
             |--------------------------------------------------------------------------
-            | MOVIMIENTOS DE CAJA (ingresos / egresos)
+            | MOVIMIENTOS DE CAJA
             |--------------------------------------------------------------------------
             */
             Route::post('/caja/movimientos', [CajaMovimientoController::class, 'store'])
@@ -256,10 +250,12 @@ Route::middleware(['auth'])->group(function () {
             Route::patch('/comandas/{comanda}/estado', [MozoComandaController::class, 'setEstado'])
                 ->name('comandas.estado');
 
+            Route::get('/comandas/{comanda}/print', [MozoComandaController::class, 'print'])
+                ->name('comandas.print');
+
             Route::post('/comandas/{comanda}/solicitar-cuenta', [MozoComandaController::class, 'solicitarCuenta'])
                 ->name('comandas.solicitarCuenta');
 
-            // NUEVO: pedir impresión remota de preticket en caja
             Route::post('/comandas/{comanda}/pedir-preticket', [MozoComandaController::class, 'pedirPreticket'])
                 ->name('comandas.pedirPreticket');
         });

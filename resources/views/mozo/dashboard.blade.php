@@ -140,6 +140,24 @@
         </div>
     </div>
 
+    {{-- Toast impresión comanda --}}
+    <div id="rfToastComanda"
+         class="fixed bottom-5 right-5 z-50 pointer-events-none opacity-0 translate-y-2 transition duration-200 ease-out">
+        <div class="pointer-events-auto rounded-2xl border border-emerald-200 bg-white shadow-lg px-4 py-3 flex items-start gap-3">
+            <div class="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+                ✅
+            </div>
+            <div class="min-w-0">
+                <div class="font-extrabold text-slate-900" id="rfToastComandaTitle">Listo</div>
+                <div class="text-sm text-slate-600" id="rfToastComandaMsg">Comanda impresa.</div>
+            </div>
+            <button type="button" id="rfToastComandaClose"
+                    class="ml-2 text-slate-400 hover:text-slate-700 font-bold">
+                ✕
+            </button>
+        </div>
+    </div>
+
     @push('modals')
         @include('mozo.modals.comanda')
         @include('mozo.modals.add-item')
@@ -152,6 +170,7 @@
                 initClock();
                 initMobileTabs();
                 initDelegations();
+                initPrintComanda();
 
                 if (currentMesaId() > 0 && isMobile()) {
                     switchTab('comanda');
@@ -589,6 +608,93 @@
                 window.addEventListener('popstate', () => {
                     const mesaId = currentMesaId();
                     if (mesaId > 0) selectMesaFast(mesaId);
+                });
+            }
+
+            function initPrintComanda() {
+                const toast = document.getElementById('rfToastComanda');
+                const toastTitle = document.getElementById('rfToastComandaTitle');
+                const toastMsg = document.getElementById('rfToastComandaMsg');
+                const toastClose = document.getElementById('rfToastComandaClose');
+
+                let toastTimer = null;
+
+                function showToast(title, msg) {
+                    if (!toast) return;
+
+                    toastTitle.textContent = title || 'Listo';
+                    toastMsg.textContent = msg || '';
+
+                    toast.classList.remove('opacity-0', 'translate-y-2');
+                    toast.classList.add('opacity-100', 'translate-y-0');
+
+                    if (toastTimer) clearTimeout(toastTimer);
+                    toastTimer = setTimeout(hideToast, 2400);
+                }
+
+                function hideToast() {
+                    if (!toast) return;
+                    toast.classList.add('opacity-0', 'translate-y-2');
+                    toast.classList.remove('opacity-100', 'translate-y-0');
+                }
+
+                toastClose?.addEventListener('click', hideToast);
+
+                let printFrame = document.getElementById('rfPrintFrameMozo');
+                if (!printFrame) {
+                    printFrame = document.createElement('iframe');
+                    printFrame.id = 'rfPrintFrameMozo';
+                    printFrame.style.position = 'fixed';
+                    printFrame.style.right = '0';
+                    printFrame.style.bottom = '0';
+                    printFrame.style.width = '0';
+                    printFrame.style.height = '0';
+                    printFrame.style.border = '0';
+                    printFrame.style.opacity = '0';
+                    document.body.appendChild(printFrame);
+                }
+
+                let lastPrintedId = null;
+                let lastPrintedAt = 0;
+
+                function printedOnce(comandaId) {
+                    const now = Date.now();
+                    if (lastPrintedId === comandaId && (now - lastPrintedAt) < 1200) return false;
+                    lastPrintedId = comandaId;
+                    lastPrintedAt = now;
+                    return true;
+                }
+
+                function notifyPrinted(comandaId) {
+                    if (!printedOnce(comandaId)) return;
+                    showToast('Comanda impresa', 'Comanda #' + comandaId + ' enviada a impresión.');
+                }
+
+                window.addEventListener('message', function(ev) {
+                    const data = ev.data || {};
+                    if (data.type === 'RF_PRINT_DONE' && data.comanda_id) {
+                        notifyPrinted(parseInt(data.comanda_id, 10));
+                    }
+                });
+
+                document.addEventListener('click', function(e) {
+                    const btn = e.target.closest('.js-print-comanda');
+                    if (!btn) return;
+
+                    e.preventDefault();
+
+                    const url = btn.dataset.printUrl || btn.getAttribute('href');
+                    const comandaId = parseInt(btn.dataset.comandaId || '0', 10);
+
+                    if (!url) return;
+
+                    printFrame.src = url;
+
+                    if (comandaId) {
+                        setTimeout(function() {
+                            notifyPrinted(comandaId);
+                        }, 1100);
+                    }
                 });
             }
         </script>

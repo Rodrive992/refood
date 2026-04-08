@@ -482,4 +482,19 @@ class ComandaController extends Controller
             ->route('mozo.dashboard', ['mesa_id' => $comanda->id_mesa])
             ->with('ok', 'Estado de comanda actualizado.');
     }
+
+    public function print(\App\Models\Comanda $comanda)
+    {
+        $user = auth()->user();
+        $localId = (int) ($user->id_local ?? 0);
+
+        abort_if(empty($localId), 403, 'Tu usuario no tiene un local asignado.');
+        abort_unless((int) $comanda->id_local === $localId, 403);
+
+        $comanda->load(['mesa', 'mozo', 'items']);
+
+        $printedAt = now()->setTimezone('America/Argentina/Buenos_Aires');
+
+        return view('admin.comandas.print', compact('comanda', 'printedAt'));
+    }
 }
