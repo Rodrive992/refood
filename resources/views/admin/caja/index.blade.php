@@ -625,10 +625,23 @@
         showToast('Cierre de turno impreso', 'Turno #' + turnoId + ' enviado a impresión.');
     }
 
-    function notifyComandaCocina(comandaId) {
-        const key = 'cocina:' + comandaId;
+    function notifyComandaCocina(comandaId, jobType = 'print', pedidoNumero = null) {
+        const suffix = pedidoNumero ? ':p' + pedidoNumero : '';
+        const key = 'cocina:' + jobType + ':' + comandaId + suffix;
         if (!once(key, 5000)) return;
-        showCocinaToast('Comanda impresa', 'Comanda #' + comandaId + ' enviada a impresión de cocina.');
+
+        if (jobType === 'reprint') {
+            showCocinaToast(
+                'Pedido reimpreso',
+                'Comanda #' + comandaId + (pedidoNumero ? ' · pedido #' + pedidoNumero : '') + ' reenviada a impresión de cocina.'
+            );
+            return;
+        }
+
+        showCocinaToast(
+            'Comanda impresa',
+            'Comanda #' + comandaId + (pedidoNumero ? ' · pedido #' + pedidoNumero : '') + ' enviada a impresión de cocina.'
+        );
     }
 
     async function markPreticketPrinted(comandaId) {
@@ -646,15 +659,19 @@
         }
     }
 
-    async function markComandaPrinted(comandaId) {
+    async function markComandaPrinted(comandaId, tipoJob = 'print') {
         try {
             await fetch(`{{ url('/admin/caja/comandas') }}/${comandaId}/comanda-printed`, {
                 method: 'POST',
                 headers: {
                     'X-CSRF-TOKEN': csrf,
                     'X-Requested-With': 'XMLHttpRequest',
-                    'Accept': 'application/json'
-                }
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    tipo_job: tipoJob
+                })
             });
         } catch (e) {
             console.warn('No se pudo marcar comanda como impresa', e);
@@ -691,24 +708,37 @@
     }
 
     let cocinaBusy = false;
-    let currentCocinaId = null;
+    let currentCocinaJob = null;
 
-    function triggerComandaCocina(printUrl, comandaId) {
-        if (!printUrl || !comandaId) return;
+    function triggerComandaCocina(printUrl, job) {
+        if (!printUrl || !job || !job.id) return;
         if (cocinaBusy) return;
 
         cocinaBusy = true;
-        currentCocinaId = Number(comandaId);
+        currentCocinaJob = {
+            id: Number(job.id),
+            tipo_job: job.tipo_job || 'print',
+            pedido_numero: job.pedido_numero ? Number(job.pedido_numero) : null
+        };
 
         cocinaFrame.onload = function() {
             cocinaFrame.onload = null;
 
             setTimeout(async function () {
-                if (currentCocinaId === comandaId) {
-                    await markComandaPrinted(comandaId);
-                    notifyComandaCocina(comandaId);
-                    currentCocinaId = null;
-                    cocinaBusy = false;
+                if (!currentCocinaJob) return;
+
+                await markComandaPrinted(currentCocinaJob.id, currentCocinaJob.tipo_job);
+                notifyComandaCocina(
+                    currentCocinaJob.id,
+                    currentCocinaJob.tipo_job,
+                    currentCocinaJob.pedido_numero
+                );
+
+                currentCocinaJob = null;
+                cocinaBusy = false;
+
+                if (typeof window.__rfRefreshCaja === 'function') {
+                    window.__rfRefreshCaja();
                 }
             }, 1800);
         };
@@ -767,7 +797,7 @@
 
             if (!comandaId || !url) return;
 
-            triggerComandaCocina(url, comandaId);
+            triggerComandaCocina(url, job);
         } catch (e) {
             console.warn('Error en pollComandasCocina:', e);
         }
@@ -826,7 +856,7 @@
 
     window.addEventListener('message', async function(ev) {
         const data = ev.data || {};
-        if (data.type !== 'RF_PRINT_DONE') return;
+        if (data.type !== 'RF_PRINT_DONE' && data.type !== 'RF_REPRINT_DONE') return;
 
         if (data.mode === 'preticket' && data.comanda_id) {
             const comandaId = parseInt(data.comanda_id, 10);
@@ -857,6 +887,8 @@
 
         if (data.comanda_id) {
             const comandaId = parseInt(data.comanda_id, 10);
+            const pedidoNumero = data.pedido_numero ? parseInt(data.pedido_numero, 10) : null;
+            const tipoJob = data.type === 'RF_REPRINT_DONE' ? 'reprint' : 'print';
 
             if (currentPreticketId === comandaId) {
                 await markPreticketPrinted(comandaId);
@@ -870,16 +902,25 @@
                 return;
             }
 
-            if (currentCocinaId === comandaId) {
-                await markComandaPrinted(comandaId);
-                notifyComandaCocina(comandaId);
-                currentCocinaId = null;
+            if (currentCocinaJob && currentCocinaJob.id === comandaId) {
+                await markComandaPrinted(comandaId, currentCocinaJob.tipo_job || tipoJob);
+                notifyComandaCocina(
+                    comandaId,
+                    currentCocinaJob.tipo_job || tipoJob,
+                    currentCocinaJob.pedido_numero || pedidoNumero
+                );
+
+                currentCocinaJob = null;
                 cocinaBusy = false;
+
+                if (typeof window.__rfRefreshCaja === 'function') {
+                    window.__rfRefreshCaja();
+                }
                 return;
             }
 
-            await markComandaPrinted(comandaId);
-            notifyComandaCocina(comandaId);
+            await markComandaPrinted(comandaId, tipoJob);
+            notifyComandaCocina(comandaId, tipoJob, pedidoNumero);
         }
     });
 

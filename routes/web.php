@@ -124,7 +124,14 @@ Route::middleware(['auth'])->group(function () {
             */
             Route::get('/comandas', [AdminComandaController::class, 'index'])->name('comandas.index');
             Route::get('/comandas/poll', [AdminComandaController::class, 'poll'])->name('comandas.poll');
-            Route::get('/comandas/{comanda}/print', [AdminComandaController::class, 'print'])->name('comandas.print');
+
+            Route::get('/comandas/{comanda}/print', [AdminComandaController::class, 'print'])
+                ->name('comandas.print');
+
+            Route::get('/comandas/{comanda}/reprint/{pedidoNumero}', [AdminComandaController::class, 'reprint'])
+                ->whereNumber('pedidoNumero')
+                ->name('comandas.reprint');
+
             Route::get('/comandas/{comanda}', [AdminComandaController::class, 'show'])->name('comandas.show');
 
             /*
@@ -143,7 +150,7 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/caja/comandas/{comanda}/preticket-printed', [CajaController::class, 'markPreticketPrinted'])
                 ->name('caja.preticketPrinted');
 
-            // NUEVO: comandas de cocina remotas
+            // Comandas de cocina remotas
             Route::get('/caja/comandas-cocina-poll', [CajaController::class, 'comandasCocinaPoll'])
                 ->name('caja.comandasCocinaPoll');
 
@@ -263,8 +270,11 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/comandas/{comanda}/pedir-preticket', [MozoComandaController::class, 'pedirPreticket'])
                 ->name('comandas.pedirPreticket');
 
-            // NUEVO: pedir impresión remota de comanda cocina en admin/caja
             Route::post('/comandas/{comanda}/pedir-impresion-cocina', [MozoComandaController::class, 'pedirImpresionCocina'])
                 ->name('comandas.pedirImpresionCocina');
+
+            Route::post('/comandas/{comanda}/reimprimir/{pedidoNumero}', [MozoComandaController::class, 'pedirReimpresionCocina'])
+                ->whereNumber('pedidoNumero')
+                ->name('comandas.reimprimirPedido');
         });
 });

@@ -63,17 +63,11 @@ class ComandaController extends Controller
 
     private function ensureComandaActiva(Comanda $comanda): void
     {
-        abort_if(!in_array($comanda->estado, ['abierta', 'en_cocina', 'lista', 'entregada'], true), 422, 'La comanda no está activa.');
-    }
-
-    private function comandaActivaDeMesa(int $mesaId): ?Comanda
-    {
-        return Comanda::query()
-            ->where('id_local', $this->localId())
-            ->where('id_mesa', $mesaId)
-            ->whereIn('estado', ['abierta', 'en_cocina', 'lista', 'entregada'])
-            ->latest('id')
-            ->first();
+        abort_if(
+            !in_array($comanda->estado, ['abierta', 'en_cocina', 'lista', 'entregada'], true),
+            422,
+            'La comanda no está activa.'
+        );
     }
 
     private function normalizePayload(Request $request): array
@@ -96,6 +90,11 @@ class ComandaController extends Controller
             'items.*.cantidad' => ['required', 'numeric', 'min:0.01'],
             'items.*.nota' => ['nullable', 'string', 'max:255'],
         ]);
+    }
+
+    private function pedidoNumeroActual(Comanda $comanda): int
+    {
+        return max(1, (int) ($comanda->current_pedido_numero ?? 1));
     }
 
     public function createForMesa(Mesa $mesa)
@@ -140,17 +139,18 @@ class ComandaController extends Controller
             }
 
             $mesa->atendida_por = $user->id;
-            $mesa->atendida_at  = $mesa->atendida_at ?? now();
+            $mesa->atendida_at = $mesa->atendida_at ?? now();
             $mesa->save();
 
             Comanda::create([
-                'id_local'          => $localId,
-                'id_mesa'           => $mesa->id,
-                'id_mozo'           => $user->id,
-                'estado'            => 'abierta',
-                'observacion'       => null,
-                'opened_at'         => now(),
-                'cuenta_solicitada' => 0,
+                'id_local'              => $localId,
+                'id_mesa'               => $mesa->id,
+                'id_mozo'               => $user->id,
+                'estado'                => 'abierta',
+                'observacion'           => null,
+                'opened_at'             => now(),
+                'cuenta_solicitada'     => 0,
+                'current_pedido_numero' => 1,
             ]);
         });
 
@@ -167,9 +167,7 @@ class ComandaController extends Controller
         $user = auth()->user();
         $validated = $this->normalizePayload($request);
 
-        $comanda = null;
-
-        DB::transaction(function () use (&$comanda, $validated, $mesa, $localId, $user) {
+        DB::transaction(function () use ($validated, $mesa, $localId, $user) {
             $mesa = Mesa::query()
                 ->where('id', $mesa->id)
                 ->where('id_local', $localId)
@@ -194,17 +192,18 @@ class ComandaController extends Controller
 
             if (!$comanda) {
                 $mesa->atendida_por = $user->id;
-                $mesa->atendida_at  = $mesa->atendida_at ?? now();
+                $mesa->atendida_at = $mesa->atendida_at ?? now();
                 $mesa->save();
 
                 $comanda = Comanda::create([
-                    'id_local'          => $localId,
-                    'id_mesa'           => $mesa->id,
-                    'id_mozo'           => $user->id,
-                    'estado'            => 'abierta',
-                    'observacion'       => null,
-                    'opened_at'         => now(),
-                    'cuenta_solicitada' => 0,
+                    'id_local'              => $localId,
+                    'id_mesa'               => $mesa->id,
+                    'id_mozo'               => $user->id,
+                    'estado'                => 'abierta',
+                    'observacion'           => null,
+                    'opened_at'             => now(),
+                    'cuenta_solicitada'     => 0,
+                    'current_pedido_numero' => 1,
                 ]);
             }
 
@@ -214,11 +213,15 @@ class ComandaController extends Controller
                 'Esta mesa está siendo atendida por otro mozo.'
             );
 
-            abort_if((int)($comanda->cuenta_solicitada ?? 0) === 1, 422, 'Cuenta solicitada: solo administración puede agregar items.');
+            abort_if(
+                (int) ($comanda->cuenta_solicitada ?? 0) === 1,
+                422,
+                'Cuenta solicitada: solo administración puede agregar items.'
+            );
 
             $ids = collect($validated['items'])
                 ->pluck('id_item')
-                ->map(fn($v) => (int) $v)
+                ->map(fn ($v) => (int) $v)
                 ->unique()
                 ->values();
 
@@ -229,22 +232,26 @@ class ComandaController extends Controller
                 ->get()
                 ->keyBy('id');
 
+            $pedidoNumero = $this->pedidoNumeroActual($comanda);
+
             foreach ($validated['items'] as $row) {
-                $idItem   = (int) $row['id_item'];
+                $idItem = (int) $row['id_item'];
                 $cantidad = (float) $row['cantidad'];
-                $nota     = $row['nota'] ?? null;
+                $nota = $row['nota'] ?? null;
 
                 $ci = $itemsDB->get($idItem);
                 abort_if(!$ci, 422, "El item ID {$idItem} no existe en tu carta o está inactivo.");
 
                 ComandaItem::create([
-                    'id_comanda'      => $comanda->id,
-                    'id_item'         => $ci->id,
-                    'nombre_snapshot' => $ci->nombre,
-                    'precio_snapshot' => $ci->precio,
-                    'cantidad'        => $cantidad,
-                    'nota'            => $nota,
-                    'estado'          => 'pendiente',
+                    'id_comanda'        => $comanda->id,
+                    'pedido_numero'     => $pedidoNumero,
+                    'id_item'           => $ci->id,
+                    'nombre_snapshot'   => $ci->nombre,
+                    'precio_snapshot'   => $ci->precio,
+                    'cantidad'          => $cantidad,
+                    'nota'              => $nota,
+                    'estado'            => 'pendiente',
+                    'impreso_cocina_at' => null,
                 ]);
             }
 
@@ -265,7 +272,11 @@ class ComandaController extends Controller
         $this->ensureComandaActiva($comanda);
         $this->assertComandaOperablePorEsteMozo($comanda);
 
-        abort_if((int)($comanda->cuenta_solicitada ?? 0) === 1, 422, 'Cuenta solicitada: solo administración puede agregar items.');
+        abort_if(
+            (int) ($comanda->cuenta_solicitada ?? 0) === 1,
+            422,
+            'Cuenta solicitada: solo administración puede agregar items.'
+        );
 
         $localId = $this->localId();
         $validated = $this->normalizePayload($request);
@@ -282,7 +293,7 @@ class ComandaController extends Controller
 
             $ids = collect($validated['items'])
                 ->pluck('id_item')
-                ->map(fn($v) => (int) $v)
+                ->map(fn ($v) => (int) $v)
                 ->unique()
                 ->values();
 
@@ -293,22 +304,26 @@ class ComandaController extends Controller
                 ->get()
                 ->keyBy('id');
 
+            $pedidoNumero = $this->pedidoNumeroActual($comanda);
+
             foreach ($validated['items'] as $row) {
-                $idItem   = (int) $row['id_item'];
+                $idItem = (int) $row['id_item'];
                 $cantidad = (float) $row['cantidad'];
-                $nota     = $row['nota'] ?? null;
+                $nota = $row['nota'] ?? null;
 
                 $ci = $itemsDB->get($idItem);
                 abort_if(!$ci, 422, "El item ID {$idItem} no existe en tu carta o está inactivo.");
 
                 ComandaItem::create([
-                    'id_comanda'      => $comanda->id,
-                    'id_item'         => $ci->id,
-                    'nombre_snapshot' => $ci->nombre,
-                    'precio_snapshot' => $ci->precio,
-                    'cantidad'        => $cantidad,
-                    'nota'            => $nota,
-                    'estado'          => 'pendiente',
+                    'id_comanda'        => $comanda->id,
+                    'pedido_numero'     => $pedidoNumero,
+                    'id_item'           => $ci->id,
+                    'nombre_snapshot'   => $ci->nombre,
+                    'precio_snapshot'   => $ci->precio,
+                    'cantidad'          => $cantidad,
+                    'nota'              => $nota,
+                    'estado'            => 'pendiente',
+                    'impreso_cocina_at' => null,
                 ]);
             }
 
@@ -333,11 +348,12 @@ class ComandaController extends Controller
             'nota' => ['nullable', 'string', 'max:255'],
         ]);
 
-        if ((int)($comanda->cuenta_solicitada ?? 0) === 1) {
+        if ((int) ($comanda->cuenta_solicitada ?? 0) === 1) {
             return back()->with('ok', 'La cuenta ya fue solicitada.');
         }
 
         $subtotal = (float) $comanda->items()
+            ->where('estado', '!=', 'anulado')
             ->sum(DB::raw('precio_snapshot * cantidad'));
 
         DB::transaction(function () use ($comanda, $data, $subtotal) {
@@ -374,17 +390,8 @@ class ComandaController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            abort_if(
-                in_array($comanda->estado, ['cerrada', 'anulada'], true),
-                422,
-                'La comanda ya está cerrada o anulada.'
-            );
-
-            abort_if(
-                empty($comanda->id_mesa),
-                422,
-                'La comanda no tiene mesa asociada.'
-            );
+            abort_if(in_array($comanda->estado, ['cerrada', 'anulada'], true), 422, 'La comanda ya está cerrada o anulada.');
+            abort_if(empty($comanda->id_mesa), 422, 'La comanda no tiene mesa asociada.');
 
             $mesa = Mesa::query()
                 ->where('id', $comanda->id_mesa)
@@ -392,31 +399,12 @@ class ComandaController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            abort_if(
-                in_array($mesa->estado, ['inactiva', 'fuera_servicio'], true),
-                422,
-                'La mesa no está disponible.'
-            );
+            abort_if(in_array($mesa->estado, ['inactiva', 'fuera_servicio'], true), 422, 'La mesa no está disponible.');
+            abort_if($mesa->estado === 'libre', 422, 'La mesa está libre.');
+            abort_if((int) ($mesa->atendida_por ?? 0) !== $this->mozoId(), 403, 'Esta mesa está siendo atendida por otro mozo.');
+            abort_if((int) ($comanda->cuenta_solicitada ?? 0) !== 1, 422, 'Primero tenés que solicitar la cuenta.');
 
-            abort_if(
-                $mesa->estado === 'libre',
-                422,
-                'La mesa está libre.'
-            );
-
-            abort_if(
-                (int) ($mesa->atendida_por ?? 0) !== $this->mozoId(),
-                403,
-                'Esta mesa está siendo atendida por otro mozo.'
-            );
-
-            abort_if(
-                (int)($comanda->cuenta_solicitada ?? 0) !== 1,
-                422,
-                'Primero tenés que solicitar la cuenta.'
-            );
-
-            if ((int)($comanda->preticket_pendiente ?? 0) === 1) {
+            if ((int) ($comanda->preticket_pendiente ?? 0) === 1) {
                 return;
             }
 
@@ -436,6 +424,59 @@ class ComandaController extends Controller
         $this->assertComandaLocal($comanda);
 
         DB::transaction(function () use ($comanda) {
+            $comanda = Comanda::query()
+                ->where('id', $comanda->id)
+                ->where('id_local', $this->localId())
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            abort_if(in_array($comanda->estado, ['cerrada', 'anulada'], true), 422, 'La comanda ya está cerrada o anulada.');
+            abort_if(empty($comanda->id_mesa), 422, 'La comanda no tiene mesa asociada.');
+
+            $mesa = Mesa::query()
+                ->where('id', $comanda->id_mesa)
+                ->where('id_local', $this->localId())
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            abort_if(in_array($mesa->estado, ['inactiva', 'fuera_servicio'], true), 422, 'La mesa no está disponible.');
+            abort_if($mesa->estado === 'libre', 422, 'La mesa está libre.');
+            abort_if((int) ($mesa->atendida_por ?? 0) !== $this->mozoId(), 403, 'Esta mesa está siendo atendida por otro mozo.');
+
+            if ((int) ($comanda->comanda_print_pendiente ?? 0) === 1) {
+                return;
+            }
+
+            $pedidoNumero = $this->pedidoNumeroActual($comanda);
+
+            $hayItemsPendientesDelPedidoActual = $comanda->items()
+                ->where('pedido_numero', $pedidoNumero)
+                ->where('estado', '!=', 'anulado')
+                ->whereNull('impreso_cocina_at')
+                ->exists();
+
+            abort_if(
+                !$hayItemsPendientesDelPedidoActual,
+                422,
+                'No hay items nuevos en este pedido para imprimir en cocina.'
+            );
+
+            $comanda->update([
+                'comanda_print_pendiente'      => 1,
+                'comanda_print_solicitado_at'  => now(),
+                'comanda_print_solicitado_por' => auth()->id(),
+                'comanda_print_impreso_at'     => null,
+            ]);
+        });
+
+        return back()->with('ok', 'Pedido enviado a la PC de administración para impresión en cocina.');
+    }
+
+    public function pedirReimpresionCocina(Comanda $comanda, int $pedidoNumero)
+    {
+        $this->assertComandaLocal($comanda);
+
+        DB::transaction(function () use ($comanda, $pedidoNumero) {
             $comanda = Comanda::query()
                 ->where('id', $comanda->id)
                 ->where('id_local', $this->localId())
@@ -478,19 +519,34 @@ class ComandaController extends Controller
                 'Esta mesa está siendo atendida por otro mozo.'
             );
 
-            if ((int)($comanda->comanda_print_pendiente ?? 0) === 1) {
-                return;
-            }
+            abort_if(
+                (int) ($comanda->reprint_pendiente ?? 0) === 1,
+                422,
+                'Ya hay una reimpresión pendiente para esta comanda.'
+            );
+
+            $pedidoNumero = max(1, (int) $pedidoNumero);
+
+            $existePedido = $comanda->items()
+                ->where('pedido_numero', $pedidoNumero)
+                ->where('estado', '!=', 'anulado')
+                ->exists();
+
+            abort_if(
+                !$existePedido,
+                422,
+                "El pedido #{$pedidoNumero} no existe."
+            );
 
             $comanda->update([
-                'comanda_print_pendiente'      => 1,
-                'comanda_print_solicitado_at'  => now(),
-                'comanda_print_solicitado_por' => auth()->id(),
-                'comanda_print_impreso_at'     => null,
+                'reprint_pendiente'      => 1,
+                'reprint_pedido_numero'  => $pedidoNumero,
+                'reprint_solicitado_at'  => now(),
+                'reprint_solicitado_por' => auth()->id(),
             ]);
         });
 
-        return back()->with('ok', 'Comanda enviada a la PC de administración para impresión en cocina.');
+        return back()->with('ok', "Se envió la reimpresión del pedido #{$pedidoNumero} a administración.");
     }
 
     public function updateItem(Request $request, ComandaItem $comandaItem)
@@ -505,12 +561,16 @@ class ComandaController extends Controller
         $this->ensureComandaActiva($comanda);
         $this->assertComandaOperablePorEsteMozo($comanda);
 
-        abort_if((int)($comanda->cuenta_solicitada ?? 0) === 1, 422, 'Cuenta solicitada: solo administración puede modificar items.');
+        abort_if(
+            (int) ($comanda->cuenta_solicitada ?? 0) === 1,
+            422,
+            'Cuenta solicitada: solo administración puede modificar items.'
+        );
 
         $validated = $request->validate([
             'cantidad' => ['nullable', 'numeric', 'min:0.01'],
             'nota'     => ['nullable', 'string', 'max:255'],
-            'estado'   => ['nullable', 'in:pendiente,en_cocina,listo,entregado'],
+            'estado'   => ['nullable', 'in:pendiente,en_cocina,listo,entregado,anulado'],
         ]);
 
         $comandaItem->fill($validated)->save();
@@ -533,7 +593,7 @@ class ComandaController extends Controller
             abort(422, 'No se puede modificar una comanda cerrada/anulada.');
         }
 
-        if ((int)($comanda->cuenta_solicitada ?? 0) === 1) {
+        if ((int) ($comanda->cuenta_solicitada ?? 0) === 1) {
             abort(422, 'Cuenta solicitada: la comanda queda bloqueada hasta que Caja la cierre.');
         }
 

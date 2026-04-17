@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Comanda;
 use App\Models\Mesa;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ComandaController extends Controller
 {
@@ -16,13 +17,17 @@ class ComandaController extends Controller
         return (int) $idLocal;
     }
 
+    private function pedidoNumeroActual(Comanda $comanda): int
+    {
+        return max(1, (int) ($comanda->current_pedido_numero ?? 1));
+    }
+
     public function index(Request $request)
     {
         $localId = $this->localId();
 
-        $estado = $request->get('estado', 'activas'); // activas | todas | cerradas
+        $estado = $request->get('estado', 'activas');
         $mesaId = $request->get('mesa_id');
-
         $q = trim((string) $request->get('q', ''));
 
         $query = Comanda::query()
@@ -44,7 +49,7 @@ class ComandaController extends Controller
         if ($q !== '') {
             $query->where(function ($sub) use ($q) {
                 if (ctype_digit($q)) {
-                    $sub->orWhere('id', (int)$q);
+                    $sub->orWhere('id', (int) $q);
                 }
                 $sub->orWhere('observacion', 'like', "%{$q}%");
             });
@@ -61,44 +66,29 @@ class ComandaController extends Controller
         return view('admin.comandas.index', compact('comandas', 'mesas', 'estado', 'mesaId', 'q'));
     }
 
-    /**
-     * ✅ Unificamos flujo:
-     * El detalle real + cobro se maneja en CAJA.
-     * Si alguien entra a /admin/comandas/{comanda}, lo mandamos a /admin/caja/comandas/{comanda}
-     */
     public function show(Comanda $comanda)
     {
         $localId = $this->localId();
-        abort_unless((int)$comanda->id_local === $localId, 403);
+        abort_unless((int) $comanda->id_local === $localId, 403);
 
         return redirect()->route('admin.caja.show', $comanda);
     }
 
-    /**
-     * ❌ Cobro eliminado en Comandas.
-     * El cobro se hace únicamente en CajaController@cobrar.
-     *
-     * Si por error alguien apunta a esta ruta, lo redirigimos a caja.
-     */
     public function cobrar(Request $request, Comanda $comanda)
     {
         $localId = $this->localId();
-        abort_unless((int)$comanda->id_local === $localId, 403);
+        abort_unless((int) $comanda->id_local === $localId, 403);
 
         return redirect()
             ->route('admin.caja.show', $comanda)
             ->with('ok', 'El cobro se realiza desde CAJA.');
     }
 
-    /**
-     * ✅ Poll AJAX: refresco automático del index SIN recargar.
-     * Devuelve HTML renderizado (cards y paginación) + contadores para sonido.
-     */
     public function poll(Request $request)
     {
         $localId = $this->localId();
 
-        $estado = $request->get('estado', 'activas'); // activas | todas | cerradas
+        $estado = $request->get('estado', 'activas');
         $mesaId = $request->get('mesa_id');
         $q = trim((string) $request->get('q', ''));
         $page = max(1, (int) $request->get('page', 1));
@@ -122,7 +112,7 @@ class ComandaController extends Controller
         if ($q !== '') {
             $query->where(function ($sub) use ($q) {
                 if (ctype_digit($q)) {
-                    $sub->orWhere('id', (int)$q);
+                    $sub->orWhere('id', (int) $q);
                 }
                 $sub->orWhere('observacion', 'like', "%{$q}%");
             });
@@ -146,20 +136,136 @@ class ComandaController extends Controller
         ]);
     }
 
-    /**
-     * ✅ Imprimir comanda (ticket cocina).
-     * No toca CAJA. Es solo impresión.
-     */
     public function print(Comanda $comanda)
     {
         $localId = $this->localId();
-        abort_unless((int)$comanda->id_local === $localId, 403);
+        abort_unless((int) $comanda->id_local === $localId, 403);
 
-        $comanda->load(['mesa', 'mozo', 'items']);
+        $printedAt = now()->setTimezone('America/Argentina/Buenos_Aires');
+        $pedidoNumero = null;
+        $itemsPedido = collect();
 
-        // Hora local (Argentina). Ideal: que app.timezone ya sea America/Argentina/Buenos_Aires
+        DB::transaction(function () use ($comanda, $localId, $printedAt, &$pedidoNumero, &$itemsPedido) {
+            $comanda = Comanda::query()
+                ->where('id', $comanda->id)
+                ->where('id_local', $localId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            abort_if(
+                in_array($comanda->estado, ['cerrada', 'anulada'], true),
+                422,
+                'La comanda ya está cerrada o anulada.'
+            );
+
+            abort_if(
+                (int) ($comanda->comanda_print_pendiente ?? 0) !== 1,
+                422,
+                'No hay pedido pendiente de impresión para esta comanda.'
+            );
+
+            $pedidoNumero = $this->pedidoNumeroActual($comanda);
+
+            $itemsPedido = $comanda->items()
+                ->where('pedido_numero', $pedidoNumero)
+                ->where('estado', '!=', 'anulado')
+                ->whereNull('impreso_cocina_at')
+                ->orderBy('id')
+                ->get();
+
+            abort_if(
+                $itemsPedido->isEmpty(),
+                422,
+                'No hay items nuevos para imprimir en este pedido.'
+            );
+
+            $ids = $itemsPedido->pluck('id')->all();
+
+            $comanda->items()
+                ->whereIn('id', $ids)
+                ->update([
+                    'impreso_cocina_at' => $printedAt,
+                ]);
+
+            $comanda->items()
+                ->whereIn('id', $ids)
+                ->where('estado', 'pendiente')
+                ->update([
+                    'estado' => 'en_cocina',
+                ]);
+
+            $comanda->update([
+                'comanda_print_pendiente'  => 0,
+                'comanda_print_impreso_at' => $printedAt,
+                'current_pedido_numero'    => $pedidoNumero + 1,
+            ]);
+        });
+
+        $comanda->load(['mesa', 'mozo']);
+
+        return view('admin.comandas.print', [
+            'comanda'       => $comanda,
+            'printedAt'     => $printedAt,
+            'pedidoNumero'  => $pedidoNumero,
+            'itemsPedido'   => $itemsPedido,
+            'esReimpresion' => false,
+        ]);
+    }
+
+    public function reprint(Request $request, Comanda $comanda, int $pedidoNumero)
+    {
+        $localId = $this->localId();
+        abort_unless((int) $comanda->id_local === $localId, 403);
+
+        $pedidoNumero = max(1, (int) $pedidoNumero);
+
+        DB::transaction(function () use ($comanda, $pedidoNumero, $localId) {
+            $comandaDb = Comanda::query()
+                ->where('id', $comanda->id)
+                ->where('id_local', $localId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            abort_if(
+                in_array($comandaDb->estado, ['cerrada', 'anulada'], true),
+                422,
+                'La comanda ya está cerrada o anulada.'
+            );
+
+            if (
+                (int) ($comandaDb->reprint_pendiente ?? 0) === 1 &&
+                (int) ($comandaDb->reprint_pedido_numero ?? 0) === $pedidoNumero
+            ) {
+                $comandaDb->update([
+                    'reprint_pendiente'      => 0,
+                    'reprint_pedido_numero'  => null,
+                    'reprint_solicitado_at'  => null,
+                    'reprint_solicitado_por' => null,
+                ]);
+            }
+        });
+
+        $itemsPedido = $comanda->items()
+            ->where('pedido_numero', $pedidoNumero)
+            ->where('estado', '!=', 'anulado')
+            ->orderBy('id')
+            ->get();
+
+        abort_if(
+            $itemsPedido->isEmpty(),
+            422,
+            "El pedido #{$pedidoNumero} no existe o no tiene items imprimibles."
+        );
+
+        $comanda->load(['mesa', 'mozo']);
         $printedAt = now()->setTimezone('America/Argentina/Buenos_Aires');
 
-        return view('admin.comandas.print', compact('comanda', 'printedAt'));
+        return view('admin.comandas.reprint', [
+            'comanda'       => $comanda,
+            'printedAt'     => $printedAt,
+            'pedidoNumero'  => $pedidoNumero,
+            'itemsPedido'   => $itemsPedido,
+            'esReimpresion' => true,
+        ]);
     }
 }

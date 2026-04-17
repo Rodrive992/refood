@@ -28,11 +28,17 @@ class Comanda extends Model
         'preticket_solicitado_por',
         'preticket_impreso_at',
 
-        // NUEVO: impresión remota de comanda cocina
         'comanda_print_pendiente',
         'comanda_print_solicitado_at',
         'comanda_print_solicitado_por',
         'comanda_print_impreso_at',
+
+        'current_pedido_numero',
+
+        'reprint_pedido_numero',
+        'reprint_pendiente',
+        'reprint_solicitado_at',
+        'reprint_solicitado_por',
 
         'total_estimado',
         'estado_caja',
@@ -56,11 +62,17 @@ class Comanda extends Model
         'preticket_solicitado_por' => 'integer',
         'preticket_impreso_at' => 'datetime',
 
-        // NUEVO: impresión remota de comanda cocina
         'comanda_print_pendiente' => 'boolean',
         'comanda_print_solicitado_at' => 'datetime',
         'comanda_print_solicitado_por' => 'integer',
         'comanda_print_impreso_at' => 'datetime',
+
+        'current_pedido_numero' => 'integer',
+
+        'reprint_pedido_numero' => 'integer',
+        'reprint_pendiente' => 'boolean',
+        'reprint_solicitado_at' => 'datetime',
+        'reprint_solicitado_por' => 'integer',
 
         'total_estimado' => 'decimal:2',
 
@@ -95,10 +107,14 @@ class Comanda extends Model
         return $this->belongsTo(User::class, 'preticket_solicitado_por');
     }
 
-    // NUEVO
     public function comandaPrintSolicitadoPor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'comanda_print_solicitado_por');
+    }
+
+    public function reprintSolicitadoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reprint_solicitado_por');
     }
 
     public function items(): HasMany
@@ -148,6 +164,29 @@ class Comanda extends Model
     {
         return $this->items()
             ->whereIn('estado', ['pendiente', 'en_cocina'])
+            ->exists();
+    }
+
+    public function getPedidoActualNumeroAttribute(): int
+    {
+        return max(1, (int) ($this->current_pedido_numero ?? 1));
+    }
+
+    public function itemsDelPedidoActual()
+    {
+        return $this->items()->where('pedido_numero', $this->pedido_actual_numero);
+    }
+
+    public function itemsDelPedido(int $pedidoNumero)
+    {
+        return $this->items()->where('pedido_numero', max(1, $pedidoNumero));
+    }
+
+    public function getTienePedidoActualSinImprimirAttribute(): bool
+    {
+        return $this->items()
+            ->where('pedido_numero', $this->pedido_actual_numero)
+            ->whereNull('impreso_cocina_at')
             ->exists();
     }
 }

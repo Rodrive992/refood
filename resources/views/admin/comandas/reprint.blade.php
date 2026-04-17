@@ -1,11 +1,11 @@
-{{-- resources/views/admin/comandas/print.blade.php --}}
+{{-- resources/views/admin/comandas/reprint.blade.php --}}
 
 <!doctype html>
 <html lang="es">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>La Piscala - Comanda para Cocina</title>
+    <title>La Piscala - Reimpresión de Comanda</title>
 
     <style>
         @page { margin: 8mm; }
@@ -38,6 +38,16 @@
             margin-top: 6px;
         }
 
+        .reprint-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border: 1px solid #dc2626;
+            color: #dc2626;
+            border-radius: 6px;
+            font-weight: 800;
+            margin-top: 6px;
+        }
+
         .nota {
             margin-top: 3px;
             padding-left: 44px;
@@ -48,27 +58,16 @@
 
 @php
     $printedAt = $printedAt ?? now()->timezone('America/Argentina/Buenos_Aires');
-
     $mesaNombre = $comanda->mesa->nombre ?? 'Sin mesa';
     $mozoNombre = $comanda->mozo->name ?? '—';
     $obs = trim((string)($comanda->observacion ?? ''));
-
-    $pedidoNumero = isset($pedidoNumero) ? (int) $pedidoNumero : (int) ($comanda->current_pedido_numero ?? 1);
-
+    $pedidoNumero = isset($pedidoNumero) ? (int) $pedidoNumero : 1;
     $itemsPedido = collect($itemsPedido ?? []);
-
-    if ($itemsPedido->isEmpty()) {
-        $itemsPedido = $comanda->items()
-            ->select(['id', 'pedido_numero', 'nombre_snapshot', 'cantidad', 'nota', 'estado', 'impreso_cocina_at'])
-            ->where('pedido_numero', $pedidoNumero)
-            ->where('estado', '!=', 'anulado')
-            ->orderBy('id', 'asc')
-            ->get();
-    }
 @endphp
 
 <div class="center">
     <div style="font-weight: 800; font-size: 14px;">La Piscala - Comanda para Cocina</div>
+    <div class="reprint-badge">REIMPRESIÓN</div>
     <div class="pedido-badge">Pedido #{{ $pedidoNumero }}</div>
     <div class="muted" style="margin-top: 4px;">
         {{ $printedAt->format('d/m/Y H:i') }} (AR)
@@ -120,7 +119,7 @@
 <div class="hr"></div>
 
 <div class="center muted">
-    — FIN PEDIDO #{{ $pedidoNumero }} —
+    — FIN REIMPRESIÓN PEDIDO #{{ $pedidoNumero }} —
 </div>
 
 <script>
@@ -128,7 +127,7 @@
     function notifyParent() {
         try {
             window.parent && window.parent.postMessage({
-                type: 'RF_PRINT_DONE',
+                type: 'RF_REPRINT_DONE',
                 comanda_id: {{ (int) $comanda->id }},
                 pedido_numero: {{ (int) $pedidoNumero }}
             }, '*');
@@ -139,8 +138,6 @@
         setTimeout(function () {
             try { window.focus(); } catch (e) {}
             window.print();
-
-            // respaldo para iframes/navegadores que no disparan bien afterprint
             notifyParent();
         }, 80);
     });

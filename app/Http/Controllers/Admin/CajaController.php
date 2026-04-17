@@ -110,7 +110,7 @@ class CajaController extends Controller
         $comanda->load([
             'mesa',
             'mozo',
-            'items' => fn($q) => $q->orderBy('id'),
+            'items' => fn($q) => $q->orderBy('pedido_numero')->orderBy('id'),
         ]);
 
         $subtotal = (float) $comanda->items
@@ -153,7 +153,11 @@ class CajaController extends Controller
                 ->with('error', 'La cuenta todavía no fue solicitada para esa comanda.');
         }
 
-        $comanda->load(['mesa', 'mozo', 'items' => fn($q) => $q->orderBy('id')]);
+        $comanda->load([
+            'mesa',
+            'mozo',
+            'items' => fn($q) => $q->orderBy('pedido_numero')->orderBy('id'),
+        ]);
 
         $subtotal = (float) $comanda->items
             ->where('estado', '!=', 'anulado')
@@ -183,6 +187,12 @@ class CajaController extends Controller
         ]);
 
         DB::transaction(function () use ($data, $comanda, $localId) {
+            $comanda = Comanda::query()
+                ->where('id', $comanda->id)
+                ->where('id_local', $localId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
             $ids = collect($data['items'])
                 ->pluck('id_item')
                 ->map(fn($v) => (int)$v)
@@ -196,6 +206,8 @@ class CajaController extends Controller
                 ->get()
                 ->keyBy('id');
 
+            $pedidoNumero = max(1, (int)($comanda->current_pedido_numero ?? 1));
+
             foreach ($data['items'] as $row) {
                 $idItem = (int) $row['id_item'];
                 $cantidad = (float) $row['cantidad'];
@@ -205,13 +217,15 @@ class CajaController extends Controller
                 abort_if(!$ci, 422, "El item ID {$idItem} no existe en tu carta o está inactivo.");
 
                 ComandaItem::create([
-                    'id_comanda'      => $comanda->id,
-                    'id_item'         => $ci->id,
-                    'nombre_snapshot' => $ci->nombre,
-                    'precio_snapshot' => $ci->precio,
-                    'cantidad'        => $cantidad,
-                    'nota'            => $nota,
-                    'estado'          => 'pendiente',
+                    'id_comanda'        => $comanda->id,
+                    'pedido_numero'     => $pedidoNumero,
+                    'id_item'           => $ci->id,
+                    'nombre_snapshot'   => $ci->nombre,
+                    'precio_snapshot'   => $ci->precio,
+                    'cantidad'          => $cantidad,
+                    'nota'              => $nota,
+                    'estado'            => 'pendiente',
+                    'impreso_cocina_at' => null,
                 ]);
             }
 
@@ -489,6 +503,7 @@ class CajaController extends Controller
                 'id' => (int) $comanda->id,
                 'mesa' => $comanda->mesa->nombre ?? 'Sin mesa',
                 'mozo' => $comanda->mozo->name ?? ('#' . $comanda->id_mozo),
+                'tipo_job' => 'preticket',
                 'print_url' => route('admin.caja.cuenta.print', $comanda),
                 'solicitado_at' => optional($comanda->preticket_solicitado_at)?->toISOString(),
             ];
@@ -527,7 +542,7 @@ class CajaController extends Controller
             abort(404, 'La cuenta no ha sido solicitada');
         }
 
-        $comanda->load(['mesa', 'mozo', 'items' => fn($q) => $q->orderBy('id')]);
+        $comanda->load(['mesa', 'mozo', 'items' => fn($q) => $q->orderBy('pedido_numero')->orderBy('id')]);
 
         $subtotal = (float) $comanda->items
             ->where('estado', '!=', 'anulado')
@@ -540,23 +555,55 @@ class CajaController extends Controller
     {
         $localId = $this->localId();
 
-        $pendientes = Comanda::query()
+        $impresionesNormales = Comanda::query()
             ->where('id_local', $localId)
             ->where('comanda_print_pendiente', 1)
             ->whereNotIn('estado', ['cerrada', 'anulada'])
             ->with(['mesa', 'mozo'])
             ->orderBy('comanda_print_solicitado_at')
-            ->get();
+            ->get()
+            ->map(function ($comanda) {
+                return [
+                    'id' => (int) $comanda->id,
+                    'mesa' => $comanda->mesa->nombre ?? 'Sin mesa',
+                    'mozo' => $comanda->mozo->name ?? ('#' . $comanda->id_mozo),
+                    'tipo_job' => 'print',
+                    'pedido_numero' => max(1, (int)($comanda->current_pedido_numero ?? 1)),
+                    'print_url' => route('admin.comandas.print', $comanda),
+                    'solicitado_at' => optional($comanda->comanda_print_solicitado_at)?->toISOString(),
+                ];
+            });
 
-        $jobs = $pendientes->map(function ($comanda) {
-            return [
-                'id' => (int) $comanda->id,
-                'mesa' => $comanda->mesa->nombre ?? 'Sin mesa',
-                'mozo' => $comanda->mozo->name ?? ('#' . $comanda->id_mozo),
-                'print_url' => route('admin.comandas.print', $comanda),
-                'solicitado_at' => optional($comanda->comanda_print_solicitado_at)?->toISOString(),
-            ];
-        })->values();
+        $reimpresiones = Comanda::query()
+            ->where('id_local', $localId)
+            ->where('reprint_pendiente', 1)
+            ->whereNotIn('estado', ['cerrada', 'anulada'])
+            ->with(['mesa', 'mozo'])
+            ->orderBy('reprint_solicitado_at')
+            ->get()
+            ->map(function ($comanda) {
+                $pedidoNumero = max(1, (int)($comanda->reprint_pedido_numero ?? 1));
+
+                return [
+                    'id' => (int) $comanda->id,
+                    'mesa' => $comanda->mesa->nombre ?? 'Sin mesa',
+                    'mozo' => $comanda->mozo->name ?? ('#' . $comanda->id_mozo),
+                    'tipo_job' => 'reprint',
+                    'pedido_numero' => $pedidoNumero,
+                    'print_url' => route('admin.comandas.reprint', [
+                        'comanda' => $comanda,
+                        'pedidoNumero' => $pedidoNumero,
+                    ]),
+                    'solicitado_at' => optional($comanda->reprint_solicitado_at)?->toISOString(),
+                ];
+            });
+
+        $jobs = $impresionesNormales
+            ->concat($reimpresiones)
+            ->sortBy(function ($job) {
+                return $job['solicitado_at'] ?? now()->toISOString();
+            })
+            ->values();
 
         return response()->json([
             'ok' => true,
@@ -566,19 +613,43 @@ class CajaController extends Controller
         ]);
     }
 
-    public function markComandaPrinted(Comanda $comanda)
+    public function markComandaPrinted(Request $request, Comanda $comanda)
     {
         $localId = $this->localId();
         abort_unless((int) $comanda->id_local === $localId, 403);
 
-        $comanda->update([
-            'comanda_print_pendiente' => 0,
-            'comanda_print_impreso_at' => now('America/Argentina/Buenos_Aires'),
-        ]);
+        $tipoJob = (string) $request->input('tipo_job', '');
+
+        $payload = [];
+
+        if ($tipoJob === 'reprint') {
+            $payload = [
+                'reprint_pendiente'      => 0,
+                'reprint_pedido_numero'  => null,
+                'reprint_solicitado_at'  => null,
+                'reprint_solicitado_por' => null,
+            ];
+        } else {
+            $payload = [
+                'comanda_print_pendiente' => 0,
+                'comanda_print_impreso_at' => now('America/Argentina/Buenos_Aires'),
+            ];
+
+            if ((int)($comanda->reprint_pendiente ?? 0) === 1 && $tipoJob === '') {
+                $payload['reprint_pendiente'] = 0;
+                $payload['reprint_pedido_numero'] = null;
+                $payload['reprint_solicitado_at'] = null;
+                $payload['reprint_solicitado_por'] = null;
+            }
+        }
+
+        $comanda->update($payload);
 
         return response()->json([
             'ok' => true,
-            'message' => 'Comanda marcada como impresa.',
+            'message' => $tipoJob === 'reprint'
+                ? 'Reimpresión marcada como procesada.'
+                : 'Comanda marcada como impresa.',
         ]);
     }
 }
